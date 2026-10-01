@@ -1,10 +1,12 @@
 # Chrome extension setup and verification
 
 The extension is in `frontend/extension`. Users' originals live in their own Google Drive.
-Only file metadata and an upload recovery journal are stored in the extension's IndexedDB.
+File metadata, extracted document text and an upload recovery journal are stored in the
+extension's account-scoped IndexedDB.
 A connected build uses the small HTTPS-hosted Picker helper at
-<https://siddharthaganguli.github.io/multimodal-smart-file-organizer/>. End users do not install
-Python, a database, Node, or a local server. The helper files have been published to the
+<https://siddharthaganguli.github.io/multimodal-smart-file-organizer/>. Drive storage needs no
+Python, database, Node, or local server. Text extraction needs the local Python companion
+below. The helper files have been published to the
 `gh-pages` branch and GitHub Pages is enabled. All three hosted files returned HTTP 200 and
 matched the reviewed source byte for byte. The user reports the end-to-end workflow,
 including hosted file/folder selection and uploads, working. Developers
@@ -47,6 +49,39 @@ The key is visible in the distributed extension; it is not a substitute for the 
 Sources: [Chrome OAuth](https://developer.chrome.com/docs/extensions/how-to/integrate/oauth),
 [Drive scopes](https://developers.google.com/workspace/drive/api/guides/api-specific-auth),
 [Google Picker setup](https://developers.google.com/workspace/drive/picker/guides/web-picker-sample).
+
+## Text extraction companion
+
+Filewise 0.2.0 retains the shared extension ID. Reload it at `chrome://extensions` after
+updating, then close and reopen its tab so the new scripts and localhost permission apply.
+
+From the repository root on Windows, install Python 3.11-3.13 dependencies once:
+
+```powershell
+py -3.12 -m venv .venv
+.venv\Scripts\python.exe -m pip install -e ".[dev]"
+```
+
+If `.venv` already exists, use it and run only the install command when dependencies change.
+Start the companion when you want to extract text:
+
+```powershell
+.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Keep that terminal open; Ctrl+C stops the companion. It is separate from the optional
+Node Picker helper on port 8765. No PostgreSQL, Redis or Celery setup is needed.
+
+Upload or import a TXT, DOCX or PDF to extract it automatically. For files already in the
+library, select **Extract text**. Open **View text** to inspect the result. If the companion
+is stopped, the file stays saved in Drive; start it and choose **Retry extraction**.
+Images and scanned PDF pages still require the later OCR milestone.
+
+The companion receives document bytes, never Google tokens; it deletes temporary files
+and returns the result to the extension without saving it on the server. The extension
+stores results under the correct account, invalidates changed Drive versions and rechecks
+permissions before showing saved text. See [the extraction guide](document-extraction.md)
+for parser limits and the separate CLI that writes local JSON.
 
 ## Optional local development helper
 
@@ -128,8 +163,8 @@ For a fresh deployment, or to maintain this repository's GitHub Pages copy:
 5. Check the hosted `config.js` extension-origin allowlist and the API key website
    restrictions, reload the extension, and perform the live Picker checks below.
 
-Publication of the helper was authorized and the publishing branch has been created. The
-extension implementation has not been merged into `main`. Repeat hosted-file verification
+The helper publishing branch is configured, and the Drive extension was merged into `main`
+through PR #18. Repeat hosted-file verification
 after changes and complete the live acceptance checks before distributing the extension.
 
 See [GitHub Pages creation](https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site)
@@ -159,11 +194,12 @@ Sources: [Chrome extension sandbox rules](https://developer.chrome.com/docs/exte
 - Use the account's `Filewise uploads` folder, or an explicitly selected writable folder.
 - Register existing files selected in Google Picker without copying or moving them.
 - Keep account-scoped metadata, SHA-256 for local uploads, and processing state.
+- Extract TXT, DOCX and PDF text through the local companion; retry failures and preview results.
 - Search registered filenames, refresh permissions/metadata, open files in Drive, and download originals.
 - Recover completed-but-unrecorded uploads by their preallocated Drive ID. For unfinished
   uploads, choose Retry and reselect the same original; the checksum must match.
 
-Keep the extension tab open until an upload finishes. It does not persist file contents;
+Keep the extension tab open until upload and extraction finish. It does not persist original bytes;
 closing the tab can interrupt transfer. The persisted journal and resumable session enable
 recovery without replacing the Drive ID. Do not delete the journal to resolve an uncertain upload.
 
@@ -173,13 +209,16 @@ existing child or recursively import the folder. Pick existing files explicitly.
 
 Google-native Docs/Sheets/Slides require a later export workflow; this milestone handles
 uploaded original file formats. Automatic classification, category subfolders, OCR and
-meaning-based search remain later milestones. New records show that content is not processed.
+meaning-based search remain later milestones. Status distinguishes saved files, extracted
+text, empty documents, OCR-needed pages and extraction failures.
 
 ## Where information lives
 
 - Original bytes: the user's Google Drive, using that account's quota.
 - Metadata/journal: IndexedDB in this Chrome profile, keyed by Drive account permission ID
   and file/operation ID. Not shared across accounts or automatically synced across devices.
+- Extracted text/status/provenance: stored on the same account-scoped asset in IndexedDB.
+  The companion's temporary original is deleted after parsing; no API result is saved there.
 - Active account: `chrome.storage.session`; browser restarts can require reconnecting.
 - Access tokens: Chrome Identity's managed cache and temporary memory only. No token in
   IndexedDB, `chrome.storage.local`, logs, file URLs, or a server database.
@@ -231,6 +270,12 @@ not been individually confirmed live; automated tests cover them using mocked re
 - [ ] Revoke app/file access and refresh; stale results must not permit retrieval.
 - [ ] Verify useful errors for unsupported/oversized files, quota exhaustion and lost network.
 - [ ] Verify Google Picker API key restrictions with the actual web helper and Google frame.
+- [ ] With the companion running, upload/import a TXT, DOCX and text PDF; compare **View text**
+  with the originals. Confirm scanned PDF pages show **OCR needed**.
+- [ ] Stop the companion, upload a document, then restart it and use **Retry extraction**;
+  verify extraction succeeds without creating another Drive original.
+- [ ] Modify a Drive document and refresh; confirm its old text is invalidated. Revoke
+  download permission and confirm **View text** no longer returns cached text.
 - [ ] For a distribution build, repeat Picker selection with the hosted HTTPS helper and
   no local development server running.
 
@@ -241,5 +286,6 @@ Passing mocked tests alone does not establish live behavior for those scenarios.
 
 The current directory is an unpacked development extension. A public release additionally
 needs your consent-screen/publication configuration, a privacy policy describing local
-metadata and Google access, and Chrome Web Store review. Publishing the static helper does
+metadata, extracted text, local companion processing and Google access, and Chrome Web Store
+review. Publishing the static helper does
 not publish the extension to the Chrome Web Store or complete the live acceptance checks.
