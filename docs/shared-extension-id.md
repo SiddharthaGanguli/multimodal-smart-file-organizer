@@ -57,9 +57,10 @@ All 113 Node tests pass. Two actual Chromium installations in separate folders a
 profiles both report `llobmhbiebleflpmbfdobhbkecbgefab` and pass the configured-build check.
 The maintainer supplied the new OAuth client ID. The helper allowlist update is committed
 to `gh-pages` at `5c4da10a0c43ec14c9b6dd79e0cc58dcb2485d93`. The hosted `config.js` returns
-HTTP 200 and contains both extension IDs. An authenticated test on the second device is
-pending. The currently working 0.1.2
-installation has not been modified by preparation of this separate candidate.
+HTTP 200 and contains both extension IDs. On 2026-10-01, after installing the shared build,
+the user confirmed "done working" on the second device and requested merging PR #19.
+This is user-reported live confirmation; the automated probes did not use a real Google
+account. The original 0.1.2 installation was not modified while preparing this fix.
 
 References: [Chrome manifest key](https://developer.chrome.com/docs/extensions/reference/manifest/key),
 [Chrome OAuth setup](https://developer.chrome.com/docs/extensions/how-to/integrate/oauth),

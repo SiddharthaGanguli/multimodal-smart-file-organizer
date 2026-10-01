@@ -27,7 +27,7 @@ The existing backend-local upload PR #17 was not merged.
 | Live persistence, search, and download | User reports the file remains listed/searchable after closing and reopening Filewise, and the downloaded file opens correctly; exact-byte comparison not confirmed |
 | Live folder selection and upload destination | User replied "now all working" after the folder-selection/upload check and requested a PR for issue #2 on 2026-10-01 |
 | Shared identity, version 0.1.3 | Actual Chromium installs in two different folders and fresh profiles both report `llobmhbiebleflpmbfdobhbkecbgefab`; configuration checks pass |
-| Shared Google OAuth client | New public client ID supplied by the maintainer and configured; authenticated second-device test still pending |
+| Shared Google OAuth client | New public client ID supplied by the maintainer and configured; user confirmed the shared build works on the second device and requested merging PR #19 |
 | Published shared-ID helper allowlist | Hosted `config.js` returns HTTP 200 and includes both the original and shared extension IDs |
 
 ## Cross-device identity correction
@@ -40,8 +40,9 @@ ID. The Picker allowlist retains the original ID and adds the shared ID.
 All 113 Node tests pass. Two actual installed-extension probes, using separate copied folders
 and fresh Chromium profiles, independently return the same shared ID and configured state.
 The report is `.pr-reviews/shared-id-check-1790853901309/report.json` in the original workspace.
-These probes do not authorize a real Google account. See [shared identity setup](shared-extension-id.md)
-for rollout steps and the remaining authenticated check on the user's other device.
+These probes do not authorize a real Google account. The user subsequently confirmed
+"done working" on the other device and requested merging PR #19 on 2026-10-01.
+See [shared identity setup](shared-extension-id.md) for rollout steps and verification details.
 
 The browser workflow uses mocked Chrome Identity and Drive responses. It verifies uploads
 and downloads preserve bytes, metadata survives reload, accounts are isolated, imports are
