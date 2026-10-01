@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Filewise — Your Drive Library",
+  "version": "0.1.2",
+  "description": "Upload and organize a private library of files in your own Google Drive.",
+  "minimum_chrome_version": "120",
+  "permissions": ["identity", "storage"],
+  "host_permissions": ["https://www.googleapis.com/*"],
+  "oauth2": {
+    "client_id": "305934899702-ao13e4jcitlo8945rjbi7b7fj543ar4q.apps.googleusercontent.com",
+    "scopes": ["https://www.googleapis.com/auth/drive.file"]
+  },
+  "action": { "default_title": "Open Filewise" },
+  "background": { "service_worker": "src/background.js", "type": "module" },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'self' https://www.googleapis.com; frame-src http://127.0.0.1:8765 https://siddharthaganguli.github.io; base-uri 'none'"
+  }
+}

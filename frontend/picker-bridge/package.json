@@ -1,0 +1,6 @@
+{
+  "name": "filewise-picker-bridge",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node serve.mjs" }
+}
