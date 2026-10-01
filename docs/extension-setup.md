@@ -15,8 +15,9 @@ can optionally use the loopback helper and need Node 22 or newer for it and the 
 1. Create a Google Cloud project. Enable **Google Drive API** and **Google Picker API**.
 2. Configure the OAuth consent screen. While the app is in testing, add the Google accounts
    that will test it. Request only `https://www.googleapis.com/auth/drive.file`.
-3. Open `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select
-   this repository's `frontend/extension` directory. Copy the extension ID.
+3. Use the manifest's shared public key when distributing this GitHub build. Open
+   `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select
+   `frontend/extension`. Verify its ID is `llobmhbiebleflpmbfdobhbkecbgefab` on every device.
 4. Create an OAuth client with application type **Chrome Extension** (called Chrome App
    in some versions of the console), using that exact extension ID. Put its public client ID
    in `frontend/extension/manifest.json` under `oauth2.client_id`.
@@ -30,11 +31,12 @@ can optionally use the loopback helper and need Node 22 or newer for it and the 
 7. Reload the extension and click its toolbar button. Choose **Connect Google Drive**.
    Test accounts must consent to the requested per-file access.
 
-For a stable ID across developer machines/builds, use the public extension key from your
-Chrome Web Store developer dashboard as the manifest's `key` before registering OAuth.
-Changing the extension ID requires updating the OAuth client's registered extension ID and
-the Picker helper's extension-origin allowlist.
-For local testing, keeping the unpacked directory fixed keeps the local ID consistent.
+This GitHub build pins its ID with a public key in the manifest. Keep that key unchanged
+between releases. See [shared identity and rollout](shared-extension-id.md) for the configured
+OAuth registration, distribution steps, and migration from the old path-dependent ID.
+For a Chrome Web Store build, obtain its public key from the developer dashboard and compare
+its ID before configuring OAuth. Changing the ID requires coordinating the OAuth registration,
+Picker allowlist, and extension storage migration.
 
 Google's API key website restrictions must allow Picker's `https://docs.google.com/*`
 requests and the actual helper website, such as `https://siddharthaganguli.github.io/*`.

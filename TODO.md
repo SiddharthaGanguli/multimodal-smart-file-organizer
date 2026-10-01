@@ -33,11 +33,19 @@ This is the repository-level roadmap. GitHub issues track active milestone work.
 - [x] Verify the extension loads the hosted helper in a browser (dummy OAuth, no local server)
 - [x] Confirm the end-to-end Drive workflow works with the configured Google project (user-reported)
 - [ ] Complete the additional live failure/recovery checks in docs/extension-setup.md
+- [x] Pin a shared public-key extension ID for GitHub installations
+- [x] Register the shared ID in Google OAuth and configure its new client ID (maintainer-supplied)
+- [x] Publish the updated Picker allowlist and verify both IDs are served over HTTPS
+- [x] Distribute the configured shared extension build
+- [x] Confirm the shared build works on the second device (user-reported on 2026-10-01)
 
 The hosted helper is at <https://siddharthaganguli.github.io/multimodal-smart-file-organizer/>.
-The extension implementation is not merged into `main`. On 2026-10-01, the user confirmed
-the workflow is working after the folder-selection/upload check and requested a PR for #2.
-Detailed live failure/recovery checks remain recorded separately from that confirmation.
+PR #18 merged the extension implementation into `main`. On 2026-10-01, the user reported
+that another device receives a different extension ID and Google rejects its OAuth client.
+The shared-ID candidate addresses that cause and includes the maintainer's new OAuth client.
+The hosted Picker accepts both IDs. The user confirmed the shared build works on the
+second device and requested merging PR #19. See docs/shared-extension-id.md. Detailed live failure/recovery checks
+remain separate from the original successful workflow confirmation.
 
 ## Milestone 2 — Document extraction
 - [ ] TXT extraction
