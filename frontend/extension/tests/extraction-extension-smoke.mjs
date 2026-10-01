@@ -91,6 +91,38 @@ try {
     await writeFile(join(output, `${name}.json`), JSON.stringify(result, null, 2));
     report.passed.push(`${name}: ${result.status}, expected text and OCR pages`);
     console.log(`PASS ${report.passed.at(-1)}`);
+    if (result.ocr_pages.length) {
+      // Exercise the integration boundary using real companion output and packaged OCR.
+      const recognized = await page.evaluate(async ({ base64, result }) => {
+        const { recognize } = await import("./src/ocr/browser.js");
+        const { createView } = await import("./src/view.js");
+        const bytes = Uint8Array.from(atob(base64), character => character.charCodeAt(0));
+        const view = createView();
+        const asset = { assetId: "mixed-scan", name: result.source_name, mimeType: "application/pdf",
+          size: bytes.length, processingStatus: result.status, extraction: result };
+        view.render({ configured: true, connected: true, assets: [asset], ocr: {}, pending: [] });
+        view.showExtraction(result);
+        window.__combinedView = view;
+        return recognize(new Blob([bytes], { type: asset.mimeType }), {
+          mimeType: asset.mimeType, pageNumbers: result.ocr_pages,
+        });
+      }, { base64: original.toString("base64"), result });
+      assert.equal(recognized.status, "complete");
+      assert.deepEqual(recognized.pages.map(item => item.pageNumber), [2]);
+      assert.match(recognized.text, /Scanned invoice: INR 300/i);
+      assert.match(await page.locator("#extraction-hint").textContent(), /Read scan/);
+      assert.equal(await page.locator('[data-action="ocr"]').textContent(), "Read scan");
+      assert.equal(await page.locator('[data-action="view-text"]').textContent(), "View text");
+      assert.equal(await page.locator("#extraction-text").textContent(), result.text);
+      await page.evaluate(() => window.__combinedView.closeExtraction());
+      await page.setViewportSize({ width: 390, height: 844 });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      await page.screenshot({ path: join(output, "combined-mobile.png"), fullPage: true });
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      assert.deepEqual(await readFile(source), original);
+      report.passed.push("Mixed PDF: companion identifies page 2; local OCR reads it; both actions and previews coexist");
+      console.log(`PASS ${report.passed.at(-1)}`);
+    }
   }
   await Promise.all(requestChecks);
   assert.equal(report.requests.filter(request => request.method === "POST").length, checks.length);

@@ -16,7 +16,7 @@ const { chromium } = await import(runtime ? pathToFileURL(resolve(runtime)).href
 const output = join(root, "test-results", `browser-${Date.now()}`);
 await mkdir(output, { recursive: true });
 const report = { passed: [], errors: [], limitations: ["OAuth and Google Drive responses are mocked; no real accounts or Drive files are accessed.", "Google Picker SDK and installed-extension CSP are not verified by this localhost smoke test."] };
-const mimeTypes = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json" };
+const mimeTypes = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".wasm": "application/wasm", ".css": "text/css", ".json": "application/json" };
 // Serve explicit fixtures, never the developer's configured API key or OAuth client.
 const fixtureConfig = {
   googleProjectNumber: "123456789", googlePickerApiKey: "test-public-picker-key",
@@ -445,6 +445,80 @@ try {
     await page.locator("#refresh-button").click(); await idle();
     assert.equal(await page.locator(".file-name").count(), 1);
     assert.equal(await page.locator('.file-name', { hasText: "meeting-notes.txt" }).count(), 0);
+  });
+  await check("OCR reads an uploaded image and persists text across reload", async () => {
+    const png = await page.evaluate(() => {
+      const canvas = document.createElement("canvas"); canvas.width = 1200; canvas.height = 300;
+      const ctx = canvas.getContext("2d"); ctx.fillStyle = "white"; ctx.fillRect(0, 0, 1200, 300);
+      ctx.fillStyle = "black"; ctx.font = "bold 55px Arial"; ctx.fillText("FILEWISE PRIVATE RECEIPT", 40, 120);
+      return canvas.toDataURL("image/png").split(",")[1];
+    });
+    await page.locator("#upload-input").setInputFiles({ name: "receipt.png", mimeType: "image/png", buffer: Buffer.from(png, "base64") });
+    await page.getByText("receipt.png", { exact: true }).waitFor(); await idle();
+    await page.locator('[data-action="ocr"]').click();
+    await page.waitForFunction(() => document.querySelector("#ocr-pages").textContent.includes("FILEWISE PRIVATE RECEIPT")); await idle();
+    assert.equal(await page.locator(".ocr-badge").textContent(), "Text ready");
+    await page.locator("#ocr-close").click();
+    await page.reload(); await page.locator('[data-action="ocr"]').waitFor(); await idle();
+    assert.equal(await page.locator('[data-action="ocr"]').textContent(), "View OCR text");
+    await page.locator('[data-action="ocr"]').click(); await idle();
+    assert.match(await page.locator("#ocr-pages").textContent(), /FILEWISE PRIVATE RECEIPT/);
+    await page.screenshot({ path: join(output, "ocr-saved.png"), fullPage: true });
+  });
+  await check("an account change clears displayed OCR immediately", async () => {
+    await page.evaluate(async () => {
+      const current = (await chrome.storage.session.get("activeAccount")).activeAccount;
+      await chrome.storage.session.set({ activeAccount: { ...current, id: "B", epoch: "other-tab" } });
+      localStorage.setItem("mockAccount", "B");
+    });
+    assert.equal(await page.locator("#ocr-dialog").evaluate(el => el.open), false);
+    assert.equal(await page.locator("#ocr-pages").textContent(), "");
+    await page.locator("#connect-button").click(); await idle();
+    assert.equal(await page.locator('[data-action="ocr"]').count(), 0);
+    await page.evaluate(() => localStorage.setItem("mockAccount", "A"));
+    await page.locator("#switch-button").click(); await idle();
+  });
+  await check("OCR respects revoked download permission and offers a retry", async () => {
+    const scan = [...remote.values()].find(value => value.name === "receipt.png");
+    scan.capabilities.canDownload = false;
+    await page.locator('[data-action="ocr"]').click(); await idle();
+    assert.equal(await page.locator("#ocr-pages").textContent(), "");
+    assert.match(await page.locator("#ocr-status").textContent(), /sharing permissions/);
+    assert.equal(await page.locator(".ocr-badge").count(), 0, "revoked cached text loses its ready badge");
+    scan.capabilities.canDownload = true;
+    await page.locator("#ocr-retry").click();
+    await page.waitForFunction(() => document.querySelector("#ocr-pages").textContent.includes("FILEWISE PRIVATE RECEIPT")); await idle();
+    await page.locator("#ocr-close").click();
+    scan.modifiedTime = "2026-02-02T00:00:00Z";
+    await page.locator("#refresh-button").click(); await idle();
+    assert.equal(await page.locator(".ocr-badge").count(), 0);
+    assert.equal(await page.locator('[data-action="ocr"]').textContent(), "Read text");
+  });
+  await check("IndexedDB upgrade retains v1 assets, journal and settings", async () => {
+    const migrated = await page.evaluate(async () => {
+      const name = `migration-${crypto.randomUUID()}`;
+      await new Promise((resolve, reject) => {
+        const request = indexedDB.open(name, 1);
+        request.onupgradeneeded = () => {
+          for (const table of ["assets", "operations", "settings"]) {
+            const store = request.result.createObjectStore(table, { keyPath: ["accountId", "id"] });
+            store.createIndex("accountId", "accountId");
+            store.put({ accountId: "A", id: "preserve", value: table });
+          }
+        };
+        request.onsuccess = () => { request.result.close(); resolve(); };
+        request.onerror = () => reject(request.error);
+      });
+      const { LibraryStore } = await import("./src/store.js");
+      const store = new LibraryStore(indexedDB, name);
+      const previous = await Promise.all(["assets", "operations", "settings"].map(table => store.get(table, "A", "preserve")));
+      await store.put("ocrResults", "A", "same-id", { text: "account A text" });
+      await store.put("ocrResults", "B", "same-id", { text: "account B text" });
+      const a = await store.list("ocrResults", "A"); const b = await store.list("ocrResults", "B");
+      (await store.open()).close(); indexedDB.deleteDatabase(name);
+      return { previous: previous.map(record => record.value), a: a.map(record => record.text), b: b.map(record => record.text) };
+    });
+    assert.deepEqual(migrated, { previous: ["assets", "operations", "settings"], a: ["account A text"], b: ["account B text"] });
   });
   assert.deepEqual(report.errors, [], "No browser JavaScript errors");
   console.log(`PASS ${report.passed.length} browser smoke checks; no page errors`);

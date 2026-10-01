@@ -5,6 +5,9 @@ import { LibraryStore } from "./store.js";
 import { Library } from "./library.js";
 import { createPicker } from "./picker.js";
 import { createView } from "./view.js";
+import { OcrLibrary } from "./ocr/library.js";
+import { recognize } from "./ocr/browser.js";
+import { createOcrView } from "./ocr/view.js";
 import { LocalExtractor, canExtract } from "./extraction.js";
 
 const view = createView();
@@ -18,11 +21,14 @@ const picker = createPicker({
 });
 let session = null;
 let library = null;
+let ocrLibrary = null;
+let ocrController = null;
+const ocrView = createOcrView({ onCancel: () => ocrController?.abort(), onRetry: id => readText(id, true) });
 let allAssets = [];
 let busy = false;
 const state = {
   configured: isConfigured(chrome.runtime.getManifest()), connected: false,
-  account: null, assets: [], pending: [], folder: null, busy: false,
+  account: null, assets: [], pending: [], folder: null, busy: false, ocr: {},
 };
 
 function render() {
@@ -32,6 +38,10 @@ function render() {
 }
 
 function clearAccount() {
+  ocrController?.abort();
+  ocrView.clear();
+  ocrLibrary = null;
+  state.ocr = {};
   picker.close();
   view.closeExtraction();
   session = null;
@@ -49,6 +59,7 @@ async function loadLibrary() {
   const activeLibrary = library;
   const pending = await activeLibrary.recover();
   const assets = await activeLibrary.refresh();
+  const ocr = ocrLibrary ? await ocrLibrary.summaries(assets) : {};
   let folder = null;
   try { folder = await activeLibrary.destination(); } catch (error) {
     view.notify(error.message, "error");
@@ -57,6 +68,7 @@ async function loadLibrary() {
   if (library !== activeLibrary) return;
   state.pending = pending;
   allAssets = assets;
+  state.ocr = ocr;
   state.folder = folder;
   render();
 }
@@ -77,6 +89,7 @@ async function connect(interactive = true) {
     getToken: () => auth.tokenFor(boundSession), invalidateToken: (token) => auth.invalidate(token),
   });
   library = new Library({ store, drive, auth, session: boundSession, config: CONFIG, extractor });
+  ocrLibrary = new OcrLibrary({ store, drive, auth, session: boundSession, recognize });
   state.account = account;
   state.connected = true;
   await loadLibrary();
@@ -127,6 +140,34 @@ view.on("switch", () => perform("Switching account…", async () => {
   await connect();
 }));
 view.on("search", render);
+function readText(id, force = false) {
+  return perform("Reading text on this device…", async () => {
+    const active = ocrLibrary;
+    const asset = allAssets.find(item => item.assetId === id);
+    if (!active || !asset) throw new Error("Connect Drive and choose a file first.");
+    const controller = new AbortController();
+    ocrController = controller;
+    ocrView.start(asset);
+    try {
+      const result = await active.read(id, { force, signal: controller.signal, onProgress: value => {
+        if (ocrLibrary === active) ocrView.progress(value);
+      } });
+      await active.guard();
+      if (ocrLibrary === active) {
+        ocrView.show(result);
+        await loadLibrary();
+      }
+    } catch (error) {
+      if (ocrLibrary === active) ocrView.error(error.code === "cancelled" || error.name === "AbortError" ? "Reading cancelled. You can try again." : error.message);
+      try {
+        const summaries = await active.summaries(allAssets);
+        if (ocrLibrary === active) state.ocr = summaries;
+      } catch { /* The account may have changed while the operation was running. */ }
+      if (error.code !== "cancelled" && error.name !== "AbortError") throw error;
+    } finally { if (ocrController === controller) ocrController = null; }
+  });
+}
+view.on("ocr", ({ id }) => readText(id));
 view.on("refresh", () => perform("Checking your Drive files…", loadLibrary));
 view.on("close-picker", () => picker.close());
 

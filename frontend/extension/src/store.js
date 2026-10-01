@@ -1,6 +1,6 @@
-const STORE_NAMES = ["assets", "operations", "settings"];
+const STORE_NAMES = ["assets", "operations", "settings", "ocrResults"];
 
-/** Metadata and extracted text are local to each account; originals remain in Drive. */
+/** Metadata, extracted text and OCR stay local to each account; originals remain in Drive. */
 export class LibraryStore {
   constructor(indexedDB = globalThis.indexedDB, name = "filewise-library-v1") {
     this.indexedDB = indexedDB;
@@ -10,14 +10,18 @@ export class LibraryStore {
   async open() {
     if (!this.dbPromise) {
       this.dbPromise = new Promise((resolve, reject) => {
-        const request = this.indexedDB.open(this.name, 1);
+        const request = this.indexedDB.open(this.name, 2);
         request.onupgradeneeded = () => {
           for (const name of STORE_NAMES) {
+            if (request.result.objectStoreNames.contains(name)) continue;
             const store = request.result.createObjectStore(name, { keyPath: ["accountId", "id"] });
             store.createIndex("accountId", "accountId");
           }
         };
-        request.onsuccess = () => resolve(request.result);
+        request.onsuccess = () => {
+          request.result.onversionchange = () => { request.result.close(); this.dbPromise = null; };
+          resolve(request.result);
+        };
         request.onerror = () => { this.dbPromise = null; reject(request.error); };
         request.onblocked = () => reject(new Error("Close other Filewise tabs and try again."));
       });
