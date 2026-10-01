@@ -12,7 +12,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const extension = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const fixtures = resolve(process.argv[2] || process.env.FILEWISE_FIXTURES || join(extension, "../../storage/report-checks"));
-const output = join(extension, "test-results", `extension-extraction-${Date.now()}`);
+const output = resolve(extension, "../../tmp/extension-tests", `extension-extraction-${Date.now()}`);
 await mkdir(output, { recursive: true });
 const manifest = JSON.parse(await readFile(join(extension, "manifest.json"), "utf8"));
 const extensionId = createHash("sha256").update(Buffer.from(manifest.key, "base64")).digest("hex")

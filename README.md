@@ -29,8 +29,11 @@ files returned HTTP 200 and matched the reviewed source byte for byte. Browser c
 for the hosted integration, and the user reports the end-to-end Drive workflow working.
 
 **Start here: [extension setup and live acceptance checklist](docs/extension-setup.md).**
-Load `frontend/extension` as an unpacked extension through `chrome://extensions`.
-Version 0.2.1 retains the shared ID `llobmhbiebleflpmbfdobhbkecbgefab` so GitHub downloads can
+For distribution, build the clean extension-only ZIP with
+`python frontend/extension/tools/package_extension.py`; both ZIP and unpacked files
+must fit within 10 MB. See [packaging and installation](docs/extension-packaging.md).
+Developers can also load `frontend/extension` through `chrome://extensions`.
+Version 0.2.2 retains the shared ID `llobmhbiebleflpmbfdobhbkecbgefab` so GitHub downloads can
 use the same OAuth registration on every device. Users do not configure IDs themselves.
 See [shared identity and installation](docs/shared-extension-id.md) for setup and migration.
 Use the hosted helper for **Add from Drive** and folder selection. A loopback helper is

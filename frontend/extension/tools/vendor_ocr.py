@@ -1,5 +1,6 @@
 """Maintainer-only: reproduce the locally bundled OCR runtime (no install scripts)."""
 import base64
+import gzip
 import hashlib
 import io
 import json
@@ -25,12 +26,14 @@ def destination(group, name):
         return name
     if group == "tesseract" and name.startswith("dist/") and name.endswith(".LICENSE.txt"):
         return Path(name).name
-    if group == "tesseract" and name in {"dist/tesseract.esm.min.js", "dist/worker.min.js"}:
+    if group == "tesseract" and name == "dist/worker.min.js":
         return Path(name).name
-    # These self-contained builds embed their WASM binary. Runtime uses LSTM only;
-    # include every LSTM variant so the library can choose the CPU-compatible one.
-    if group == "tesseract-core" and name.endswith(".wasm.js") and "lstm" in name:
+    # Chrome 125+ supports standard SIMD. Ship one split core, avoiding three
+    # duplicate base64-embedded engines. The binary is losslessly gzip-compressed.
+    if group == "tesseract-core" and name == "tesseract-core-simd-lstm.js":
         return name
+    if group == "tesseract-core" and name == "tesseract-core-simd-lstm.wasm":
+        return name + ".gz"
     if group == "tessdata" and name == "4.0.0_best_int/eng.traineddata.gz":
         return "eng.traineddata.gz"
     if group == "pdfjs":
@@ -45,6 +48,8 @@ def destination(group, name):
 
 def main():
     inventory = []
+    previous_path = ROOT / "inventory.json"
+    previous = json.loads(previous_path.read_text("utf-8")) if previous_path.exists() else []
     for group, package, version, url, integrity in PACKAGES:
         with urllib.request.urlopen(url, timeout=60) as response:
             archive_bytes = response.read(80 * 1024 * 1024 + 1)
@@ -63,9 +68,20 @@ def main():
                 if not target.is_relative_to((ROOT / group).resolve()):
                     raise ValueError("Unsafe package member")
                 data = archive.extractfile(member).read()
+                provenance = {}
+                if group == "tesseract-core" and name.endswith(".wasm"):
+                    provenance = {"sourcePath": name, "sourceBytes": len(data),
+                                  "sourceSha256": hashlib.sha256(data).hexdigest(),
+                                  "encoding": "gzip"}
+                    # GzipFile fixes the timestamp, filename and OS header for reproducible bytes.
+                    buffer = io.BytesIO()
+                    with gzip.GzipFile(fileobj=buffer, mode="wb", filename="", mtime=0, compresslevel=9) as stream:
+                        stream.write(data)
+                    data = buffer.getvalue()
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(data)
-                files.append({"path": f"{group}/{relative}", "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()})
+                files.append({"path": f"{group}/{relative}", "bytes": len(data),
+                              "sha256": hashlib.sha256(data).hexdigest(), **provenance})
         if group == "tessdata":
             # The npm archive omits the upstream traineddata repository license.
             license_url = "https://raw.githubusercontent.com/naptha/tessdata/gh-pages/LICENSE"
@@ -78,7 +94,15 @@ def main():
             files.append({"path": "tessdata/LICENSE", "bytes": len(data), "sha256": digest, "source": license_url})
         inventory.append({"package": package, "version": version, "url": url, "integrity": "sha512-" + integrity, "files": files})
         print(f"Bundled {package}@{version}: {len(files)} files, {sum(item['bytes'] for item in files)} bytes", flush=True)
-    (ROOT / "inventory.json").write_text(json.dumps(inventory, indent=2) + "\n", encoding="utf-8")
+    selected = {entry["path"] for package in inventory for entry in package["files"]}
+    for package in previous:
+        for entry in package["files"]:
+            if entry["path"] not in selected:
+                obsolete = (ROOT / entry["path"]).resolve()
+                if not obsolete.is_relative_to(ROOT.resolve()):
+                    raise ValueError("Unsafe obsolete inventory path")
+                obsolete.unlink(missing_ok=True)
+    (ROOT / "inventory.json").write_text(json.dumps(inventory, indent=2) + "\n", encoding="utf-8", newline="\n")
 
 
 if __name__ == "__main__":

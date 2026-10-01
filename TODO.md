@@ -168,6 +168,9 @@ The basic library, upload, account and filename-search UI is part of Milestone 1
 - [ ] Audit logging
 
 ## Milestone 15 — Deployment and monitoring
+- [x] Build an extension-only ZIP with a 10,000,000-byte zipped and unpacked budget
+- [x] Keep browser test profiles and screenshots outside the extension folder
+- [x] Add a GitHub Actions size check and downloadable extension artifact
 - [ ] Production Docker configuration
 - [ ] HTTPS/reverse proxy plan
 - [ ] Persistent volumes

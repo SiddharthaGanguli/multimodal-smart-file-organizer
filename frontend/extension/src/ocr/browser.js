@@ -39,7 +39,8 @@ async function engine({ signal, register, onProgress }) {
       worker.postMessage({ workerId: "filewise-ocr", jobId, action, payload });
     });
   };
-  await send("load", { options: { lstmOnly: true, corePath: vendor("tesseract-core/"), logging: false } });
+  await send("load", { options: { lstmOnly: true,
+    corePath: new URL("./core-loader.js", import.meta.url).href, logging: false } });
   await send("loadLanguage", { langs: "eng", options: { langPath: vendor("tessdata/"), gzip: true, cacheMethod: "none", lstmOnly: true } });
   await send("initialize", { langs: "eng", oem: 1, config: {} });
   // The API defaults to a single text block. Whole document pages need automatic

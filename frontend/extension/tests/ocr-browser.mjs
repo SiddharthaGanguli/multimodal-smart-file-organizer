@@ -4,9 +4,10 @@ import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-const root = fileURLToPath(new URL("..", import.meta.url));
+const sourceRoot = fileURLToPath(new URL("..", import.meta.url));
+const root = process.env.FILEWISE_EXTENSION_ROOT ? resolve(process.env.FILEWISE_EXTENSION_ROOT) : sourceRoot;
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ? pathToFileURL(resolve(process.env.PLAYWRIGHT_MODULE)).href : "playwright");
-const output = join(root, "test-results", `ocr-${Date.now()}`);
+const output = resolve(sourceRoot, "../../tmp/extension-tests", `ocr-${Date.now()}`);
 await mkdir(output, { recursive: true });
 const report = { passed: [], results: {}, errors: [], externalRequests: [] };
 const context = await chromium.launchPersistentContext(join(output, "profile"), {

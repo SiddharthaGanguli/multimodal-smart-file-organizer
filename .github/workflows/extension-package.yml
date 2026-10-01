@@ -1,0 +1,26 @@
+name: Extension size budget
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Package extension and enforce 10 MB budget
+        run: python frontend/extension/tools/package_extension.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: filewise-extension
+          path: dist/filewise-*.zip
+          if-no-files-found: error
