@@ -14,16 +14,30 @@ This is the repository-level roadmap. GitHub issues track active milestone work.
 - [ ] Run locally and verify tests
 - [ ] Add CI after local verification
 
-## Milestone 1 — File upload and storage
-- [ ] Define supported MIME types and size limits
-- [ ] Add upload endpoint
-- [ ] Validate files safely
-- [ ] Generate internal asset IDs and storage paths
-- [ ] Preserve originals
-- [ ] Calculate SHA-256
-- [ ] Extract metadata
-- [ ] Persist asset records
-- [ ] Add authorized file retrieval
+## Milestone 1 - Per-user Google Drive storage (issue #2)
+- [x] Manifest V3 extension and account connection flow
+- [x] Per-file Google authorization and normal-origin Picker helper integration code
+- [x] Direct Drive uploads and existing-file references
+- [x] Supported formats, upload limit, full TXT validation, hashing
+- [x] App-managed or user-selected upload folder
+- [x] Account-scoped IndexedDB metadata and upload journal
+- [x] Resumable upload/reconciliation with stable Drive IDs
+- [x] Authorized open/download and filename search
+- [x] Automated validation, Drive client and account-isolation tests
+- [x] Configure Google Cloud credentials (user reports sign-in and uploads working)
+- [x] Confirm hosted Add from Drive works (user-reported after version 0.1.2 reload)
+- [x] Confirm library persists after reopening, filename search works, and downloaded file opens (user-reported)
+- [x] Validate real folder Picker and upload into the selected folder (user-reported)
+- [x] Publish the three static Picker helper files on `gh-pages` and enable GitHub Pages
+- [x] Verify the hosted helper's three HTTPS files return HTTP 200 and match the reviewed source
+- [x] Verify the extension loads the hosted helper in a browser (dummy OAuth, no local server)
+- [x] Confirm the end-to-end Drive workflow works with the configured Google project (user-reported)
+- [ ] Complete the additional live failure/recovery checks in docs/extension-setup.md
+
+The hosted helper is at <https://siddharthaganguli.github.io/multimodal-smart-file-organizer/>.
+The extension implementation is not merged into `main`. On 2026-10-01, the user confirmed
+the workflow is working after the folder-selection/upload check and requested a PR for #2.
+Detailed live failure/recovery checks remain recorded separately from that confirmation.
 
 ## Milestone 2 — Document extraction
 - [ ] TXT extraction
@@ -95,22 +109,18 @@ This is the repository-level roadmap. GitHub issues track active milestone work.
 - [ ] Interrupted-job recovery
 - [ ] Separate processing from cloud-sync status
 
-## Milestone 11 — Google Drive
-- [ ] OAuth setup
-- [ ] Secure token storage design
-- [ ] App-managed Drive destination
-- [ ] One-way upload
-- [ ] Local ↔ Drive mapping
-- [ ] Retry/resumable behavior
-- [ ] Reconcile uncertain outcomes
+## Milestone 11 - Extended Google Drive synchronization
+Basic Drive storage and authorization are now part of Milestone 1.
+- [ ] Incremental detection of external Drive changes
+- [ ] Broader synchronization and reconciliation policies
+- [ ] Cross-device index rebuilding/synchronization design
+- [ ] Extended quota, conflict and permission-change tests
 
-## Milestone 12 — Frontend
-- [ ] React foundation
-- [ ] Upload UI
-- [ ] Processing-state UI
-- [ ] File list
+## Milestone 12 - Richer Chrome extension interface
+The basic library, upload, account and filename-search UI is part of Milestone 1.
+- [ ] Background processing-state UI
 - [ ] Gallery
-- [ ] Unified search
+- [ ] Unified content-aware search
 - [ ] Collection views
 - [ ] Review/correction UI
 
