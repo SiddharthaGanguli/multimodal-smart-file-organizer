@@ -110,7 +110,7 @@ clean cancellation. It never contacts the user's running helper or real Google a
 
 Run `npm test` from `frontend/extension` with Node 22+. The optional
 `tests/browser-smoke.mjs` header documents its Playwright setup. Test outputs are local
-and ignored under `frontend/extension/test-results/`.
+and ignored under `tmp/extension-tests/`, outside the distributable extension.
 
 See [Google configuration and the live acceptance checklist](extension-setup.md) for
 reproduction and additional checks. The user confirmed the end-to-end workflow is working

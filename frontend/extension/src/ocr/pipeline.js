@@ -2,7 +2,7 @@ export const OCR_TYPES = ["application/pdf", "image/jpeg", "image/png"];
 export const OCR_LIMITS = Object.freeze({ maxBytes: 20 * 1024 * 1024, maxPages: 25,
   maxPixels: 12_000_000, maxSourcePixels: 40_000_000, maxText: 1_000_000,
   pageTimeoutMs: 45_000, jobTimeoutMs: 180_000 });
-export const OCR_VERSION = "tesseract.js-7.0.0/eng-best-int-1.0.0/pdfjs-6.3.289/layout-2";
+export const OCR_VERSION = "tesseract.js-7.0.0/simd/eng-best-int-1.0.0/pdfjs-6.3.289/layout-2";
 
 export function ocrError(code, message) { return Object.assign(new Error(message), { code }); }
 export function cancelled() { return ocrError("cancelled", "Reading cancelled. You can try again."); }

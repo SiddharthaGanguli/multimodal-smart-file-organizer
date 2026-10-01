@@ -1,6 +1,6 @@
 # OCR pipeline — issue #4
 
-Filewise 0.2.1 reads English printed text from JPG/JPEG, PNG, and scanned PDFs.
+Filewise 0.2.2 reads English printed text from JPG/JPEG, PNG, and scanned PDFs.
 Use Chrome 125 or newer, matching the PDF.js legacy build's
 [supported browsers](https://github.com/mozilla/pdf.js/wiki/Frequently-Asked-Questions#which-browsersenvironments-are-supported).
 It uses Tesseract.js 7 (Tesseract compiled to WebAssembly) and PDF.js rasterization
@@ -97,7 +97,7 @@ The API returns a plain JSON-compatible object:
 {
   schemaVersion: 1,
   method: "ocr",
-  engineVersion: "tesseract.js-7.0.0/eng-best-int-1.0.0/pdfjs-6.3.289/layout-2",
+  engineVersion: "tesseract.js-7.0.0/simd/eng-best-int-1.0.0/pdfjs-6.3.289/layout-2",
   language: "eng",
   status: "complete", // needs_review | empty | partial | failed | cancelled
   startedAt: "ISO timestamp", completedAt: "ISO timestamp",

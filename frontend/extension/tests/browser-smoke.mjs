@@ -13,7 +13,7 @@ import { isConfigured, getPickerBridgeUrl } from "../config.js";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const runtime = process.env.PLAYWRIGHT_MODULE;
 const { chromium } = await import(runtime ? pathToFileURL(resolve(runtime)).href : "playwright");
-const output = join(root, "test-results", `browser-${Date.now()}`);
+const output = resolve(root, "../../tmp/extension-tests", `browser-${Date.now()}`);
 await mkdir(output, { recursive: true });
 const report = { passed: [], errors: [], limitations: ["OAuth and Google Drive responses are mocked; no real accounts or Drive files are accessed.", "Google Picker SDK and installed-extension CSP are not verified by this localhost smoke test."] };
 const mimeTypes = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".wasm": "application/wasm", ".css": "text/css", ".json": "application/json" };

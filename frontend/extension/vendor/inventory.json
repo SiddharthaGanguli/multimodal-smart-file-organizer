@@ -6,11 +6,6 @@
     "integrity": "sha512-exPBkd+z+wM1BuMkx/Bjv43OeLBxhL5kKWsz/9JY+DXcXdiBjiAch0V49QR3oAJqCaL5qURE0vx9Eo+G5YE7mA==",
     "files": [
       {
-        "path": "tesseract/tesseract.esm.min.js",
-        "bytes": 63220,
-        "sha256": "64871d76c75609fd5413b88a8171e2ef40deedd77d5875ba23df104b2d05eb29"
-      },
-      {
         "path": "tesseract/worker.min.js",
         "bytes": 111307,
         "sha256": "576b7df7e3393e137e51849357c9adb53fe7ac1bb69bfa06cf3d61520f182c6d"
@@ -54,19 +49,9 @@
         "sha256": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08"
       },
       {
-        "path": "tesseract-core/tesseract-core-lstm.wasm.js",
-        "bytes": 3896484,
-        "sha256": "eef5f8b2f8e20e150680b20adaec4a60babafee3adbe8a94583c81fee46e8680"
-      },
-      {
-        "path": "tesseract-core/tesseract-core-relaxedsimd-lstm.wasm.js",
-        "bytes": 3905767,
-        "sha256": "861a536cf9ef8e63cb644d57bab39c388f37f7d6b6f60024b741c5f6b39a59b3"
-      },
-      {
-        "path": "tesseract-core/tesseract-core-simd-lstm.wasm.js",
-        "bytes": 3899472,
-        "sha256": "c58b46a4c796c0b8afccf77591d5b875b6896b45d402bbce8caa6f5362447b38"
+        "path": "tesseract-core/tesseract-core-simd-lstm.js",
+        "bytes": 89271,
+        "sha256": "e48e2f02ddae3716c8dd24bf41cd290d4efa96892d689cdc4013c2545d63f469"
       },
       {
         "path": "tesseract-core/package.json",
@@ -77,6 +62,15 @@
         "path": "tesseract-core/README.md",
         "bytes": 4562,
         "sha256": "8b24e92f90bac34a54935305b1d99d5b007898d29b03992f605453232468c6fa"
+      },
+      {
+        "path": "tesseract-core/tesseract-core-simd-lstm.wasm.gz",
+        "bytes": 1055812,
+        "sha256": "880e89a71594161e6e6d7e491d47af5c262ea780c94ad29ab3deebd80a150db4",
+        "sourcePath": "tesseract-core-simd-lstm.wasm",
+        "sourceBytes": 2857601,
+        "sourceSha256": "34e8d50cac216427d86bf397d610fdd9f49492539bbcdfbfccc4eda20c810bea",
+        "encoding": "gzip"
       }
     ]
   },
