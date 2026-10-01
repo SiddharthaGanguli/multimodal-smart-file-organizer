@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local application data
+storage/
+private_data/
+tmp/
+logs/
+
+# Model / experiment outputs
+artifacts/*
+!artifacts/README.md
+*.joblib
+*.pkl
+*.onnx
+
+# Frontend build artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+
+# Docker / local overrides
+docker-compose.override.yml
