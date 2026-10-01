@@ -1,0 +1,5 @@
+SAMPLE INVOICE — fictional test data
+Invoice number: DEMO-001
+Item: Notebook
+Quantity: 2
+Total: INR 250

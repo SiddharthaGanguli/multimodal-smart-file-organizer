@@ -2,8 +2,8 @@
 
 A Chrome extension for a personal file library backed by **each user's own Google Drive**.
 Original photos, documents and reports stay in that account. The extension records metadata
-locally and provides a foundation for later OCR, classification, automatic Drive folders,
-and content-aware search.
+and extracted document text locally, providing a foundation for later OCR, classification,
+automatic Drive folders and content-aware search.
 
 ## Current implementation: issue #2
 
@@ -17,23 +17,25 @@ and content-aware search.
 - Account-scoped IndexedDB records and an upload recovery journal.
 - Resumable transfer and reconciliation using a preallocated Drive file ID.
 - Filename search, metadata refresh, authorized open and original download.
+- TXT, DOCX and PDF text extraction through a local Python companion, with retry and text preview.
 
-Users do **not** install a database, Python or a local server. Google Cloud OAuth must be
-configured for a connected build. The static Picker helper is published through GitHub Pages
+Drive storage works without Python, a database or a local server. **Text extraction needs
+the local Python companion** described below. Google Cloud OAuth must be configured for a
+connected build. The static Picker helper is published through GitHub Pages
 at <https://siddharthaganguli.github.io/multimodal-smart-file-organizer/>. All three hosted
 files returned HTTP 200 and matched the reviewed source byte for byte. Browser checks passed
 for the hosted integration, and the user reports the end-to-end Drive workflow working.
 
 **Start here: [extension setup and live acceptance checklist](docs/extension-setup.md).**
 Load `frontend/extension` as an unpacked extension through `chrome://extensions`.
-Version 0.1.3 pins the shared ID `llobmhbiebleflpmbfdobhbkecbgefab` so GitHub downloads can
+Version 0.2.0 retains the shared ID `llobmhbiebleflpmbfdobhbkecbgefab` so GitHub downloads can
 use the same OAuth registration on every device. Users do not configure IDs themselves.
 See [shared identity and installation](docs/shared-extension-id.md) for setup and migration.
 Use the hosted helper for **Add from Drive** and folder selection. A loopback helper is
 available for optional local development; see the setup guide for its configuration and
 launcher. See the setup guide for Google configuration and additional live failure/recovery
-checks. The extension implementation has not been merged into `main` or released through
-the Chrome Web Store.
+checks. The extension implementation was merged into `main` through PR #18.
+It has not been released through the Chrome Web Store.
 
 ## Storage model
 
@@ -41,6 +43,7 @@ the Chrome Web Store.
 |---|---|
 | Original file bytes | The connected user's Google Drive |
 | Asset metadata and interrupted-upload journal | Chrome IndexedDB, keyed by account and file/operation |
+| Extracted text, status and provenance | Chrome IndexedDB, on the corresponding account's asset |
 | Active account | Chrome session storage |
 | OAuth tokens | Chrome Identity's managed cache and temporary memory |
 | Future OCR, labels and semantic index | To be implemented in later milestones |
@@ -63,7 +66,7 @@ Tests cover validation, account isolation, resumable Drive REST behavior, failur
 and persistence orchestration with mocked Google responses. The optional browser smoke
 runner tests the real DOM and IndexedDB with a mocked Google API; see its header for setup.
 
-The Python/FastAPI foundation remains available for future server-side processing:
+Install the Python companion and its development tests with:
 
 ```sh
 python -m venv .venv
@@ -72,19 +75,39 @@ python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
-It is not required to run the extension and does not store extension users' originals.
+It is only required for text extraction and does not retain uploaded originals or API results.
 The previous backend-local upload PR #17 is not the implementation of the revised issue #2.
+
+## Document extraction in Filewise (Milestone 2)
+
+From the repository root, start the companion and keep the terminal open:
+
+```powershell
+.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Reload Filewise at `chrome://extensions` after updating to 0.2.0, then reopen its tab.
+New TXT, DOCX and PDF uploads/imports are extracted automatically. For existing library
+files, choose **Extract text**, then **View text**. If the companion is stopped, the file
+stays saved in Drive; start it and choose **Retry extraction**.
+
+The companion receives document bytes, never Google tokens. It deletes temporary uploads
+and returns results to the extension's account-scoped IndexedDB. Changed Drive versions
+invalidate old results, and viewing text rechecks Drive permissions. OCR is Milestone 3.
+
+The separate CLI still saves JSON: `python -m app.extractors path/to/document.pdf`.
+See the [extraction guide](docs/document-extraction.md) for the small module layout and limits.
 
 ## Later milestones
 
-1. Extract text from documents and OCR scans/images.
+1. Add OCR for scans/images and connect it to the extraction results.
 2. Build a labeled dataset and train a TF-IDF + logistic-regression classifier.
 3. Add pretrained text and image embeddings and permission-aware semantic search.
 4. Use reviewed categories to organize authorized files into Drive subfolders.
 5. Add worker processing, synchronization, richer extension views, feedback, and monitoring.
 
 Filename search is implemented now. OCR, automatic categorization/subfolders, and semantic
-search are not yet implemented. The UI does not claim new uploads have been content-processed.
+search are not yet implemented. The UI distinguishes saved files from extracted text and OCR-needed pages.
 The original proof of concept remains: find both a digital invoice and its photographed
 counterpart when searching for an invoice, and find a beach photo by its visual content.
 

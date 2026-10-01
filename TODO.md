@@ -48,11 +48,22 @@ second device and requested merging PR #19. See docs/shared-extension-id.md. Det
 remain separate from the original successful workflow confirmation.
 
 ## Milestone 2 — Document extraction
-- [ ] TXT extraction
-- [ ] DOCX extraction
-- [ ] Text-based PDF extraction
-- [ ] Detect OCR-required PDFs/pages
-- [ ] Store extraction status and provenance
+- [x] TXT extraction
+- [x] DOCX extraction
+- [x] Text-based PDF extraction
+- [x] Detect OCR-required PDFs/pages
+- [x] Store extraction status and provenance
+- [x] Connect Filewise uploads/imports to the local Python extraction API
+- [x] Add Extract text, Retry extraction, and View text for library assets
+- [x] Store results by account and invalidate changed Drive versions
+- [x] Recheck Drive permissions before extracting or viewing saved text
+- [ ] Confirm extraction and preview using the user's live Google Drive account
+
+Implemented with a loopback Python companion and a separate CLI. Filewise stores extraction
+results in account-scoped IndexedDB; the CLI saves JSON. The companion retains no originals
+or results and receives no Google tokens. Drive storage works when the companion is stopped;
+extraction can be retried after it starts. See [the extraction guide](docs/document-extraction.md)
+for setup and OCR-detection limits. Actual OCR remains Milestone 3.
 
 ## Milestone 3 — OCR
 - [ ] Integrate Tesseract/pytesseract

@@ -21,6 +21,7 @@ const mimeTypes = { ".html": "text/html", ".js": "text/javascript", ".css": "tex
 const fixtureConfig = {
   googleProjectNumber: "123456789", googlePickerApiKey: "test-public-picker-key",
   googlePickerBridgeUrl: "http://127.0.0.1:8765/picker.html",
+  extractionApiUrl: "http://127.0.0.1:8000",
   maxUploadBytes: 20 * 1024 * 1024, uploadFolderName: "Filewise test uploads",
 };
 const fixtures = {
@@ -59,7 +60,10 @@ const sessions = new Map();
 let counter = 0;
 let pickerFixture = "unavailable";
 let pickerRequests = 0;
-const bytes = Buffer.from("Filewise browser smoke: original UTF-8 bytes.\n");
+let extractionOffline = false;
+let uploadRequests = 0;
+const extractionRequests = [];
+const bytes = Buffer.from('Filewise browser smoke: original UTF-8 bytes.\n<img src=x onerror="window.__extractionXss=1">\n');
 const file = (id, name, body = bytes) => ({ id, name, mimeType: "text/plain", size: String(body.length), parents: ["folder-A"], createdTime: "2026-01-01T00:00:00Z", modifiedTime: "2026-01-01T00:00:00Z", capabilities: { canDownload: true }, sha256Checksum: createHash("sha256").update(body).digest("hex"), _body: body });
 const canonical = data => { const { _body, ...publicData } = data; return publicData; };
 async function check(name, operation) {
@@ -123,6 +127,7 @@ try {
       }
       const metadata = sessions.get(url.searchParams.get("upload_id"));
       assert.ok(metadata, "known mocked upload session");
+      uploadRequests++;
       const body = request.postDataBuffer();
       const saved = { ...file(metadata.id, metadata.name, body), mimeType: metadata.mimeType, parents: metadata.parents };
       remote.set(`${account}:${saved.id}`, saved);
@@ -140,6 +145,34 @@ try {
     if (!data) return send({ error: { errors: [{ reason: "notFound" }] } }, 404);
     if (url.searchParams.get("alt") === "media") return send(data._body, 200, { "content-type": data.mimeType, "content-length": String(data._body.length) });
     return send(canonical(data));
+  });
+  // Never contact a real companion service. Exercise raw-byte requests and CORS
+  // with an isolated schema-1 fixture; Google tokens must stay in the extension.
+  await context.route("http://127.0.0.1:8000/extractions?*", async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    assert.equal(url.pathname, "/extractions");
+    assert.equal(request.headers().authorization, undefined);
+    const headers = {
+      "access-control-allow-origin": origin,
+      "access-control-allow-methods": "POST,OPTIONS",
+      "access-control-allow-headers": "content-type,x-filewise-request",
+      "content-type": "application/json",
+    };
+    if (request.method() === "OPTIONS") return route.fulfill({ status: 204, headers });
+    assert.equal(request.method(), "POST");
+    assert.equal(request.headers()["x-filewise-request"], "extraction-v1");
+    assert.equal(request.headers()["content-type"], "application/octet-stream");
+    const body = request.postDataBuffer();
+    extractionRequests.push({ filename: url.searchParams.get("filename"), body });
+    if (extractionOffline) return route.abort("connectionrefused");
+    const text = body.toString("utf8");
+    return route.fulfill({ status: 200, headers, body: JSON.stringify({
+      schema_version: 1, source_name: url.searchParams.get("filename"), file_type: "txt",
+      extractor: "python", extractor_version: "test", extracted_at: "2026-01-01T00:00:00Z",
+      status: "extracted", text, parts: [{ location: "document", text, page_number: null, needs_ocr: false }],
+      ocr_pages: [], encoding: "utf-8", error: null,
+    }) });
   });
   // This route never falls through to the user's real helper listening on 8765.
   // The retry uses a real cross-origin frame and MessageChannel without Google's SDK.
@@ -247,13 +280,29 @@ try {
     assert.equal(await page.locator(".file-name").count(), filesBefore, "Picker cancellation adds no assets");
     assert.equal(pickerRequests, 2, "Retry used only the isolated helper fixture");
   });
-  await check("TXT upload stores original bytes and Saved metadata", async () => {
+  await check("TXT upload preserves original bytes and automatically extracts text", async () => {
     await page.locator("#upload-input").setInputFiles({ name: "meeting-notes.txt", mimeType: "text/plain", buffer: bytes });
     await page.waitForFunction(() => document.querySelector(".file-name")?.textContent === "meeting-notes.txt");
     await idle();
-    assert.equal(await page.locator(".status-badge").textContent(), "Saved");
+    assert.equal(await page.locator(".file-table .status-badge").textContent(), "Extracted");
     const data = [...remote.values()].find(item => item.name === "meeting-notes.txt");
     assert.deepEqual(data._body, bytes);
+    assert.equal(extractionRequests.length, 1);
+    assert.equal(extractionRequests[0].filename, "meeting-notes.txt");
+    assert.deepEqual(extractionRequests[0].body, bytes);
+  });
+  await check("Text preview renders document markup as plain text", async () => {
+    await page.locator('[data-action="view-text"]').click();
+    await page.waitForFunction(() => document.querySelector("#extraction-dialog").open);
+    await idle();
+    assert.equal(await page.locator("#extraction-filename").textContent(), "meeting-notes.txt");
+    assert.equal(await page.locator("#extraction-status").textContent(), "Extracted");
+    assert.equal(await page.locator("#extraction-text").textContent(), bytes.toString("utf8"));
+    assert.equal(await page.locator("#extraction-text img").count(), 0);
+    assert.equal(await page.evaluate(() => window.__extractionXss), undefined);
+    await page.screenshot({ path: join(output, "extraction-preview.png"), fullPage: true });
+    await page.locator('[data-action="close-extraction"]').click();
+    assert.equal(await page.locator("#extraction-dialog").evaluate(dialog => dialog.open), false);
   });
   await check("Filename search updates visible totals without losing records", async () => {
     await page.locator("#file-search").fill("unmatched-name");
@@ -263,10 +312,17 @@ try {
     assert.equal(await page.locator(".file-name").count(), 1);
     await page.locator("#file-search").fill("");
   });
-  await check("Reload restores real IndexedDB records and connected account", async () => {
+  await check("Reload restores extracted text from IndexedDB without extracting again", async () => {
     await page.reload();
     await page.waitForFunction(() => document.querySelector(".file-name")?.textContent === "meeting-notes.txt");
     await idle();
+    assert.equal(await page.locator(".file-table .status-badge").textContent(), "Extracted");
+    await page.locator('[data-action="view-text"]').click();
+    await page.waitForFunction(() => document.querySelector("#extraction-dialog").open);
+    await idle();
+    assert.equal(await page.locator("#extraction-text").textContent(), bytes.toString("utf8"));
+    assert.equal(extractionRequests.length, 1);
+    await page.locator('[data-action="close-extraction"]').click();
   });
   await check("Download returns the original byte-for-byte", async () => {
     const waiting = page.waitForEvent("download");
@@ -278,16 +334,54 @@ try {
     assert.equal(download.suggestedFilename(), "meeting-notes.txt");
     await idle();
   });
-  await check("Switch B hides A records; switching back restores A", async () => {
-    await page.evaluate(() => localStorage.setItem("mockAccount", "B"));
-    await page.locator("#switch-button").click();
+  await check("Account change closes and clears text preview; B cannot see A records", async () => {
+    await page.locator('[data-action="view-text"]').click();
+    await page.waitForFunction(() => document.querySelector("#extraction-dialog").open);
+    await idle();
+    // A different extension tab can change the session while this modal is open.
+    await page.evaluate(async () => {
+      localStorage.setItem("mockAccount", "B");
+      await chrome.storage.session.set({ activeAccount: { id: "B", epoch: "changed-in-another-tab" } });
+    });
+    assert.equal(await page.locator("#extraction-dialog").evaluate(dialog => dialog.open), false);
+    assert.equal(await page.locator("#extraction-text").textContent(), "");
+    assert.equal(await page.locator("#extraction-filename").textContent(), "");
+    await page.locator("#connect-button").click();
     await page.waitForFunction(() => document.querySelector("#sidebar-account-name").textContent === "Bob Example");
     await idle();
     assert.equal(await page.locator(".file-name").count(), 0);
+    assert.equal(await page.locator('[data-action="view-text"]').count(), 0);
     await page.evaluate(() => localStorage.setItem("mockAccount", "A"));
     await page.locator("#switch-button").click();
     await page.waitForFunction(() => document.querySelector(".file-name")?.textContent === "meeting-notes.txt");
     await idle();
+  });
+  await check("Offline extraction keeps the Drive upload and retries without uploading again", async () => {
+    extractionOffline = true;
+    const offlineBytes = Buffer.from("Saved in Drive even if the extraction service is stopped.\n");
+    const uploadsBefore = uploadRequests;
+    await page.locator("#upload-input").setInputFiles({ name: "offline-notes.txt", mimeType: "text/plain", buffer: offlineBytes });
+    await page.locator(".file-name", { hasText: "offline-notes.txt" }).waitFor();
+    await idle();
+    const row = page.locator(".file-table tbody tr").filter({ hasText: "offline-notes.txt" });
+    assert.equal(await row.locator(".status-badge").textContent(), "Extraction failed");
+    assert.match(await row.locator(".status-badge").getAttribute("title"), /local extraction service/i);
+    assert.equal(await row.getByRole("button", { name: "Retry extraction for offline-notes.txt" }).isEnabled(), true);
+    assert.equal(await page.locator("#pending-section").isVisible(), false, "Successful Drive upload is not an interrupted upload");
+    const remoteFile = [...remote.values()].find(item => item.name === "offline-notes.txt");
+    assert.deepEqual(remoteFile._body, offlineBytes);
+    assert.equal(uploadRequests, uploadsBefore + 1);
+    extractionOffline = false;
+    await row.getByRole("button", { name: "Retry extraction for offline-notes.txt" }).click();
+    await idle();
+    assert.equal(await row.locator(".status-badge").textContent(), "Extracted");
+    assert.equal(uploadRequests, uploadsBefore + 1, "Retry extracts the already-saved Drive file");
+    assert.equal([...remote.values()].filter(item => item.name === "offline-notes.txt").length, 1);
+    await row.locator('[data-action="view-text"]').click();
+    await page.waitForFunction(() => document.querySelector("#extraction-dialog").open);
+    await idle();
+    assert.equal(await page.locator("#extraction-text").textContent(), offlineBytes.toString("utf8"));
+    await page.locator('[data-action="close-extraction"]').click();
   });
   await check("Canonical import deduplicates and safely renders hostile filenames", async () => {
     remote.set("A:imported-xss", file("imported-xss", '<img src=x onerror="window.__xss=1">.txt'));
@@ -299,7 +393,7 @@ try {
     });
     assert.equal(count, 1);
     await page.locator("#refresh-button").click(); await idle();
-    assert.equal(await page.locator(".file-name").count(), 2);
+    assert.equal(await page.locator(".file-name").count(), 3);
     assert.equal(await page.locator("#library-content img").count(), 0);
     assert.equal(await page.evaluate(() => window.__xss), undefined);
   });
@@ -322,6 +416,28 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await page.screenshot({ path: join(output, "mobile.png"), fullPage: true });
     await page.setViewportSize({ width: 1440, height: 1000 });
+  });
+  await check("Unsupported remote replacement stays removed after another text preview", async () => {
+    const entry = [...remote.entries()].find(([, value]) => value.name === "offline-notes.txt");
+    const original = Buffer.from(entry[1]._body);
+    const staleRow = page.locator(".file-table tbody tr").filter({ hasText: "offline-notes.txt" });
+    assert.equal(await staleRow.locator(".status-badge").textContent(), "Extracted");
+    // The same Drive ID now represents a type Filewise does not support.
+    Object.assign(entry[1], { name: "offline-notes.bin", mimeType: "application/octet-stream", modifiedTime: "2026-02-01T00:00:00Z" });
+    await page.locator("#refresh-button").click();
+    await idle();
+    assert.equal(await page.locator(".file-name").count(), 2);
+    assert.equal(await page.locator(".file-name", { hasText: "offline-notes" }).count(), 0);
+    const supportedRow = page.locator(".file-table tbody tr").filter({ hasText: "meeting-notes.txt" });
+    await supportedRow.locator('[data-action="view-text"]').click();
+    await page.waitForFunction(() => document.querySelector("#extraction-dialog").open);
+    await idle();
+    assert.equal(await page.locator("#extraction-text").textContent(), bytes.toString("utf8"));
+    await page.locator('[data-action="close-extraction"]').click();
+    assert.equal(await page.locator(".file-name").count(), 2, "Preview must not restore the stale cached asset");
+    assert.equal(await page.locator(".file-name", { hasText: "offline-notes" }).count(), 0);
+    assert.equal(remote.get(entry[0]).name, "offline-notes.bin", "Unsupported original stays in Drive");
+    assert.deepEqual(remote.get(entry[0])._body, original);
   });
   await check("Refresh removes files when Google returns permission/missing 404", async () => {
     const entry = [...remote.entries()].find(([, value]) => value.name === "meeting-notes.txt");

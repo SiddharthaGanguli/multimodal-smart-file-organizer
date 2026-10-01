@@ -5,10 +5,12 @@ import { LibraryStore } from "./store.js";
 import { Library } from "./library.js";
 import { createPicker } from "./picker.js";
 import { createView } from "./view.js";
+import { LocalExtractor, canExtract } from "./extraction.js";
 
 const view = createView();
 const auth = new ChromeAuth();
 const store = new LibraryStore();
+const extractor = new LocalExtractor({ baseUrl: CONFIG.extractionApiUrl });
 const picker = createPicker({
   dialog: document.getElementById("picker-dialog"),
   iframe: document.getElementById("picker-frame"),
@@ -31,6 +33,7 @@ function render() {
 
 function clearAccount() {
   picker.close();
+  view.closeExtraction();
   session = null;
   library = null;
   allAssets = [];
@@ -73,7 +76,7 @@ async function connect(interactive = true) {
   const drive = new DriveClient({
     getToken: () => auth.tokenFor(boundSession), invalidateToken: (token) => auth.invalidate(token),
   });
-  library = new Library({ store, drive, auth, session: boundSession, config: CONFIG });
+  library = new Library({ store, drive, auth, session: boundSession, config: CONFIG, extractor });
   state.account = account;
   state.connected = true;
   await loadLibrary();
@@ -141,6 +144,12 @@ view.on("import", () => perform("Choose files from Google Drive…", async () =>
   if (!ids.length) return;
   const count = await library.importFiles(ids);
   await loadLibrary();
+  const currentLibrary = library;
+  for (const asset of allAssets.filter(asset => ids.includes(asset.driveFileId))) {
+    if (canExtract(asset) && ["not_processed", "failed"].includes(asset.processingStatus)) {
+      await processAsset(currentLibrary, asset);
+    }
+  }
   view.notify(`Added ${count} file${count === 1 ? "" : "s"} to your library. Originals stayed in place.`, "success");
 }));
 view.on("folder", () => perform("Choose an upload folder…", async () => {
@@ -155,19 +164,68 @@ async function uploadFiles(files, operationId) {
   const currentLibrary = library;
   let completed = 0;
   for (const file of Array.from(files || [])) {
-    await currentLibrary.upload(file, {
+    const asset = await currentLibrary.upload(file, {
       operationId,
       onProgress: (fraction) => {
         if (library === currentLibrary) view.setBusy(true, `${file.name} · ${Math.round(fraction * 100)}%`);
       },
     });
     completed++;
+    if (canExtract(asset)) await processAsset(currentLibrary, asset);
   }
   await loadLibrary();
   if (completed) view.notify(`Saved ${completed} file${completed === 1 ? "" : "s"} to your Google Drive.`, "success");
 }
 view.on("upload", ({ files }) => perform("Validating your files…", () => uploadFiles(files)));
 view.on("retry", ({ id, files }) => perform("Checking the interrupted upload…", () => uploadFiles(files, id)));
+
+function updateAsset(asset) {
+  allAssets = [asset, ...allAssets.filter(record => record.assetId !== asset.assetId)]
+    .sort((a, b) => b.registeredAt.localeCompare(a.registeredAt));
+  render();
+}
+
+async function processAsset(currentLibrary, asset) {
+  if (!currentLibrary || currentLibrary !== library) throw new Error("Connect Google Drive first.");
+  await currentLibrary.guard();
+  updateAsset({ ...asset, processingStatus: "processing" });
+  view.setBusy(true, `Extracting text from ${asset.name}…`);
+  try {
+    const processed = await currentLibrary.extract(asset.assetId);
+    await currentLibrary.guard();
+    if (currentLibrary !== library) return;
+    updateAsset(processed);
+    if (processed.processingStatus === "failed") view.notify(processed.processingError || "Text extraction failed. Retry this file.", "error");
+  } catch (error) {
+    // Replace temporary UI state with authoritative account-scoped records.
+    await currentLibrary.guard();
+    if (currentLibrary === library) {
+      const records = await store.list("assets", currentLibrary.session.id);
+      await currentLibrary.guard();
+      if (currentLibrary === library) { allAssets = records; render(); }
+    }
+    throw error;
+  }
+}
+
+view.on("extract", ({ id }) => perform("Extracting document text…", async () => {
+  const asset = allAssets.find(record => record.assetId === id);
+  if (!asset) throw new Error("File not found in this account.");
+  await processAsset(library, asset);
+}));
+view.on("view-text", ({ id }) => perform("Checking access to extracted text…", async () => {
+  if (!library) throw new Error("Connect Google Drive first.");
+  const currentLibrary = library;
+  try {
+    const result = await currentLibrary.extractionResult(id);
+    if (library === currentLibrary) view.showExtraction(result);
+  } finally {
+    await currentLibrary.guard();
+    const records = await store.list("assets", currentLibrary.session.id);
+    await currentLibrary.guard();
+    if (library === currentLibrary) allAssets = records;
+  }
+}));
 
 view.on("open", ({ id }) => perform("Checking Drive access…", async () => {
   if (!library) throw new Error("Connect Google Drive first.");

@@ -314,10 +314,16 @@ test("an unsupported remote MIME type cannot abort refreshing the remaining libr
   const { store, drive, library } = await fixture();
   await library.saveAsset(drive.addFile("unsupported"));
   const expected = await library.saveAsset(drive.addFile("available"));
+  const stale = await store.get("assets", ACCOUNT_A.id, "unsupported");
+  await store.put("assets", ACCOUNT_A.id, "unsupported", {
+    ...stale, processingStatus: "extracted", extraction: { text: "Old extracted text" },
+  });
   drive.remote.get("unsupported").mimeType = "application/vnd.google-apps.document";
   const visible = await library.refresh();
   assert.deepEqual(visible.map((asset) => asset.assetId), [expected.assetId]);
   assert.ok(await store.get("assets", ACCOUNT_A.id, "available"));
+  assert.equal(await store.get("assets", ACCOUNT_A.id, "unsupported"), undefined,
+    "A later UI reload of stored records must not resurrect unsupported files or their text");
   assert.equal(drive.uploads.length, 0);
   assert.equal(drive.downloads.length, 0);
 });
@@ -426,4 +432,154 @@ test("a session switch during destination commit does not return a stale folder 
   };
   await assert.rejects(library.setDestination("chosen-folder"), /account changed/);
   assert.equal(await store.get("settings", ACCOUNT_B.id, "destination"), undefined);
+});
+
+function useExtractor(library, callback = async () => {}) {
+  library.extractor = { extract: async (blob, asset) => {
+    await callback(blob, asset);
+    return { schema_version: 1, source_name: asset.name, file_type: "txt", status: "extracted",
+      text: await blob.text(), parts: [], ocr_pages: [], error: null };
+  } };
+}
+
+test("extraction stores text under the correct account and survives refresh", async () => {
+  const { library, drive, store, auth, makeLibrary } = await fixture();
+  useExtractor(library);
+  const uploaded = await library.upload(file("Invoice: INR 250"));
+  const processed = await library.extract(uploaded.assetId);
+  assert.equal(processed.processingStatus, "extracted");
+  assert.equal(processed.extraction.text, "Invoice: INR 250");
+  assert.equal(drive.uploads.length, 1);
+  assert.deepEqual((await library.refresh())[0].extraction, processed.extraction);
+  assert.deepEqual(await library.extractionResult(uploaded.assetId), processed.extraction);
+  auth.active = clone(ACCOUNT_B);
+  await assert.rejects(makeLibrary(ACCOUNT_B).extractionResult(uploaded.assetId), /not found/);
+  assert.deepEqual(await store.list("assets", ACCOUNT_B.id), []);
+});
+
+test("service unavailable is retryable without another Drive upload or pending journal", async () => {
+  const { library, drive, store } = await fixture();
+  useExtractor(library, async () => { throw new Error("Start local extraction service"); });
+  const asset = await library.upload(file());
+  const failed = await library.extract(asset.assetId);
+  assert.equal(failed.processingStatus, "failed");
+  assert.match(failed.processingError, /Start local/);
+  assert.equal(failed.extraction, null);
+  assert.deepEqual(await store.list("operations", ACCOUNT_A.id), []);
+  useExtractor(library);
+  assert.equal((await library.extract(asset.assetId)).processingStatus, "extracted");
+  assert.equal(drive.uploads.length, 1);
+});
+
+test("imported Drive files can be extracted without creating copies", async () => {
+  const { library, drive } = await fixture();
+  useExtractor(library);
+  drive.addFile("report", "Imported report");
+  await library.importFiles(["report"]);
+  const [asset] = await library.refresh();
+  assert.equal((await library.extract(asset.assetId)).extraction.text, "Imported report");
+  assert.equal(drive.uploads.length, 0);
+});
+
+test("a remote modification or rename invalidates the stored extraction", async () => {
+  for (const change of [
+    remote => { remote.modifiedTime = "2026-03-01T00:00:00Z"; },
+    remote => { remote.name = "changed.txt"; },
+    remote => { remote.sha256Checksum = hash(Buffer.from("changed")); },
+  ]) {
+    const { library, drive } = await fixture();
+    useExtractor(library);
+    const asset = await library.upload(file());
+    await library.extract(asset.assetId);
+    change(drive.remote.get(asset.driveFileId));
+    await assert.rejects(library.extractionResult(asset.assetId), /No current extraction/);
+    const [refreshed] = await library.refresh();
+    assert.equal(refreshed.extraction, null);
+    assert.equal(refreshed.processingStatus, "not_processed");
+  }
+});
+
+test("account changes during download or extraction cannot persist or return text", async () => {
+  for (const step of ["download", "extract"]) {
+    const { library, drive, store, auth } = await fixture();
+    const asset = await library.upload(file());
+    useExtractor(library, async () => { if (step === "extract") auth.active = clone(ACCOUNT_B); });
+    if (step === "download") drive.onDownload = () => { auth.active = clone(ACCOUNT_B); };
+    await assert.rejects(library.extract(asset.assetId), /account changed/);
+    assert.equal((await store.get("assets", ACCOUNT_A.id, asset.driveFileId)).extraction, null);
+    assert.deepEqual(await store.list("assets", ACCOUNT_B.id), []);
+  }
+});
+
+test("changed bytes and a changed version during parsing are not accepted", async () => {
+  for (const step of ["download", "extract"]) {
+    const { library, drive, store } = await fixture();
+    const asset = await library.upload(file("original"));
+    let called = false;
+    useExtractor(library, async () => {
+      called = true;
+      if (step === "extract") drive.remote.get(asset.driveFileId).modifiedTime = "2026-03-01T00:00:00Z";
+    });
+    if (step === "download") {
+      drive.bytes.set(asset.driveFileId, Buffer.from("modified"));
+      assert.equal((await library.extract(asset.assetId)).processingStatus, "failed");
+      assert.equal(called, false);
+    } else await assert.rejects(library.extract(asset.assetId), /changed during extraction/);
+    assert.equal((await store.get("assets", ACCOUNT_A.id, asset.driveFileId)).extraction, null);
+  }
+});
+
+test("revoked download permission clears text and blocks preview and extraction", async () => {
+  const { library, drive, store } = await fixture();
+  useExtractor(library);
+  const asset = await library.upload(file());
+  await library.extract(asset.assetId);
+  drive.remote.get(asset.driveFileId).capabilities.canDownload = false;
+  await assert.rejects(library.extractionResult(asset.assetId), /does not permit/);
+  await assert.rejects(library.extract(asset.assetId), /does not permit/);
+  assert.equal((await store.get("assets", ACCOUNT_A.id, asset.driveFileId)).extraction, null);
+  assert.equal(drive.downloads.length, 1);
+});
+
+test("OCR and empty results retain their distinct processing statuses", async () => {
+  for (const status of ["needs_ocr", "empty", "failed"]) {
+    const { library, drive } = await fixture();
+    const asset = await library.saveAsset(drive.addFile("report"));
+    library.extractor = { extract: async () => ({ status, text: "", ocr_pages: status === "needs_ocr" ? [1] : [], error: status === "failed" ? "Corrupt" : null }) };
+    const processed = await library.extract(asset.assetId);
+    assert.equal(processed.processingStatus, status);
+    assert.equal((await library.refresh())[0].processingStatus, status);
+  }
+});
+
+test("refresh in another tab waits for extraction and preserves the committed text", async () => {
+  const { library, makeLibrary } = await fixture();
+  const anotherTab = makeLibrary();
+  let tail = Promise.resolve();
+  const locks = { request: (_name, operation) => {
+    const current = tail.then(operation);
+    tail = current.catch(() => {});
+    return current;
+  } };
+  library.locks = anotherTab.locks = locks;
+  let release;
+  let entered;
+  const started = new Promise(resolve => { entered = resolve; });
+  const finish = new Promise(resolve => { release = resolve; });
+  useExtractor(library, async () => { entered(); await finish; });
+  const asset = await library.upload(file("Keep this extracted text"));
+  const extracting = library.extract(asset.assetId);
+  await started;
+  const refreshing = anotherTab.refresh();
+  release();
+  await extracting;
+  assert.equal((await refreshing)[0].extraction.text, "Keep this extracted text");
+});
+
+test("permission revocation during parsing discards the completed result", async () => {
+  const { library, drive, store } = await fixture();
+  const asset = await library.upload(file());
+  useExtractor(library, async () => { drive.getErrors.set(asset.driveFileId, driveError(404)); });
+  await assert.rejects(library.extract(asset.assetId), /404/);
+  assert.equal(await store.get("assets", ACCOUNT_A.id, asset.driveFileId), undefined);
 });

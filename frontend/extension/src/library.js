@@ -1,4 +1,5 @@
 import { validateFile } from "./validation.js";
+import { canExtract } from "./extraction.js";
 
 const FOLDER_TYPE = "application/vnd.google-apps.folder";
 const MIME_EXTENSIONS = {
@@ -9,8 +10,8 @@ const MIME_EXTENSIONS = {
 
 /** A journal is committed before Drive mutations; retries retain the same Drive ID. */
 export class Library {
-  constructor({ store, drive, auth, session, config, locks = globalThis.navigator?.locks }) {
-    Object.assign(this, { store, drive, auth, session, config, locks });
+  constructor({ store, drive, auth, session, config, extractor, locks = globalThis.navigator?.locks }) {
+    Object.assign(this, { store, drive, auth, session, config, extractor, locks });
   }
 
   async guard() { await this.auth.assert(this.session); }
@@ -28,13 +29,19 @@ export class Library {
     }
     const previous = await this.store.get("assets", this.session.id, file.id);
     // A changed remote version invalidates the locally computed hash and derived state.
-    const unchanged = previous?.modifiedTime === file.modifiedTime;
+    const unchanged = Boolean(previous && file.modifiedTime && previous.modifiedTime === file.modifiedTime &&
+      previous.mimeType === file.mimeType && previous.name === file.name &&
+      previous.size === Number(file.size || 0) &&
+      (!file.sha256Checksum || !previous.sha256 || file.sha256Checksum === previous.sha256));
     const value = {
       assetId: previous?.assetId || assetId, driveFileId: file.id,
       name: file.name, mimeType: file.mimeType, size: Number(file.size || 0),
       parents: file.parents || [], createdTime: file.createdTime, modifiedTime: file.modifiedTime,
       sha256: file.sha256Checksum || sha256 || (unchanged ? previous?.sha256 : null) || null,
-      source: previous?.source || source, processingStatus: "not_processed",
+      source: previous?.source || source,
+      processingStatus: unchanged ? previous.processingStatus : "not_processed",
+      extraction: unchanged ? previous.extraction || null : null,
+      processingError: unchanged ? previous.processingError || null : null,
       registeredAt: previous?.registeredAt || new Date().toISOString(),
       // Construct the known Google URL; never navigate to an arbitrary metadata URL.
       driveUrl: `https://drive.google.com/file/d/${encodeURIComponent(file.id)}/view`,
@@ -46,6 +53,10 @@ export class Library {
   }
 
   async refresh() {
+    return this.locked(() => this.refreshAssets());
+  }
+
+  async refreshAssets() {
     await this.guard();
     const assets = await this.store.list("assets", this.session.id);
     const visible = [];
@@ -58,7 +69,10 @@ export class Library {
           visible.push(await this.saveAsset(file));
         }
       } catch (error) {
-        if (error.code === "unsupportedType") continue;
+        if (error.code === "unsupportedType") {
+          await this.store.delete("assets", this.session.id, asset.driveFileId);
+          continue;
+        }
         if (error.status === 404 || (error.status === 403 &&
             ["insufficientFilePermissions", "forbidden", "http403"].includes(error.code))) {
           await this.store.delete("assets", this.session.id, asset.driveFileId);
@@ -219,5 +233,88 @@ export class Library {
       return { blob, name: remote.name };
     }
     return `https://drive.google.com/file/d/${encodeURIComponent(remote.id)}/view`;
+  }
+
+  async checkedAsset(assetId) {
+    await this.guard();
+    const assets = await this.store.list("assets", this.session.id);
+    const asset = assets.find((record) => record.assetId === assetId);
+    if (!asset) throw new Error("File not found in this account.");
+    let remote;
+    try {
+      remote = await this.drive.getFile(asset.driveFileId);
+    } catch (error) {
+      if (error.status === 404 || (error.status === 403 &&
+          ["insufficientFilePermissions", "forbidden", "http403"].includes(error.code))) {
+        await this.store.delete("assets", this.session.id, asset.driveFileId);
+      }
+      throw error;
+    }
+    await this.guard();
+    if (remote.trashed) {
+      await this.store.delete("assets", this.session.id, asset.driveFileId);
+      throw new Error("This file is in the Google Drive trash.");
+    }
+    let saved;
+    try { saved = await this.saveAsset(remote); } catch (error) {
+      if (error.code === "unsupportedType") await this.store.delete("assets", this.session.id, remote.id);
+      throw error;
+    }
+    if (!remote.capabilities?.canDownload) {
+      await this.store.put("assets", this.session.id, remote.id,
+        { ...saved, extraction: null, processingStatus: "not_processed", processingError: null });
+      throw new Error("Google Drive does not permit downloading or extracting this file.");
+    }
+    return saved;
+  }
+
+  async extractionResult(assetId) {
+    return this.locked(async () => {
+      const asset = await this.checkedAsset(assetId);
+      if (!asset.extraction) throw new Error("No current extraction is available. Click Extract text first.");
+      await this.guard();
+      return asset.extraction;
+    });
+  }
+
+  async extract(assetId) {
+    return this.locked(async () => {
+      const asset = await this.checkedAsset(assetId);
+      if (!canExtract(asset)) throw new Error("Text extraction supports PDF, DOCX, and TXT files.");
+      let result = null;
+      let errorMessage = null;
+      try {
+        if (!this.extractor) throw new Error("The local extraction service is not configured.");
+        if (asset.size > this.config.maxUploadBytes) throw new Error("Extraction supports files up to 20 MB.");
+        const blob = await this.drive.download(asset.driveFileId);
+        await this.guard();
+        if (blob.size !== asset.size) throw new Error("The Drive file changed. Refresh and retry extraction.");
+        if (asset.sha256) {
+          const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+          const sha256 = [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, "0")).join("");
+          if (sha256 !== asset.sha256) throw new Error("The Drive file changed. Refresh and retry extraction.");
+        }
+        await this.guard();
+        result = await this.extractor.extract(blob, asset);
+        await this.guard();
+        errorMessage = result.error || null;
+      } catch (error) {
+        await this.guard();
+        if (error.code === "authRequired" || error.code === "accountChanged" || error.status === 401) throw error;
+        errorMessage = error.message || "Text extraction failed. Retry this file.";
+      }
+      // Revalidate permissions/version after processing; don't attach text to a newer file.
+      const current = await this.checkedAsset(assetId);
+      if (current.modifiedTime !== asset.modifiedTime || current.sha256 !== asset.sha256 ||
+          current.mimeType !== asset.mimeType || current.name !== asset.name || current.size !== asset.size) {
+        throw new Error("The Drive file changed during extraction. Retry extraction for the new version.");
+      }
+      await this.guard();
+      const saved = await this.store.put("assets", this.session.id, asset.driveFileId, {
+        ...current, extraction: result, processingStatus: result?.status || "failed", processingError: errorMessage,
+      });
+      await this.guard();
+      return saved;
+    });
   }
 }

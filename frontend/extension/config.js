@@ -6,6 +6,7 @@ export const CONFIG = Object.freeze({
   googlePickerBridgeUrl: "https://siddharthaganguli.github.io/multimodal-smart-file-organizer/",
   googlePickerApiKey: "AIzaSyAoIfDg3j8gfbHVjlXtB8AsUDHCBE2bZ0I",
   maxUploadBytes: 20 * 1024 * 1024,
+  extractionApiUrl: "http://127.0.0.1:8000",
   uploadFolderName: "Filewise uploads",
 });
 

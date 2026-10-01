@@ -1,3 +1,5 @@
+import { canExtract } from "./extraction.js";
+
 const SVG_NS = "http://www.w3.org/2000/svg";
 const ICONS = {
   file: "M6 3h8l4 4v14H6z M14 3v5h4 M9 12h6 M9 16h4",
@@ -57,6 +59,14 @@ function fileType(asset) {
 
 function statusInfo(value) {
   const status = String(value || "saved").toLowerCase();
+  const extractionStates = {
+    extracted: { label: "Extracted", className: "" },
+    needs_ocr: { label: "OCR needed", className: "pending" },
+    empty: { label: "No text", className: "pending" },
+    failed: { label: "Extraction failed", className: "error" },
+    processing: { label: "Extracting", className: "pending" },
+  };
+  if (Object.hasOwn(extractionStates, status)) return extractionStates[status];
   if (/error|failed/.test(status)) return { label: "Needs attention", className: "error" };
   if (/pending|processing|queued|uploading|importing/.test(status)) {
     return { label: status === "processing" ? "Processing" : "Pending", className: "pending" };
@@ -102,6 +112,7 @@ export function createView(root = document) {
       details.querySelector("summary").focus({ preventScroll: true });
     }
     if (action === "close-picker") find("#picker-dialog").close();
+    if (action === "close-extraction") closeExtraction();
     emit(action, id === undefined ? {} : { id });
   });
 
@@ -120,10 +131,10 @@ export function createView(root = document) {
   });
 
   function disabledFor(action, state) {
-    if (["setup", "close-picker"].includes(action)) return false;
+    if (["setup", "close-picker", "close-extraction"].includes(action)) return false;
     if (busyOverride || state.busy) return true;
     if (action === "connect") return !state.configured;
-    if (["upload", "import", "folder", "refresh", "switch", "disconnect", "retry", "open", "download"].includes(action)) {
+    if (["upload", "import", "folder", "refresh", "switch", "disconnect", "retry", "open", "download", "extract", "view-text"].includes(action)) {
       return !state.configured || !state.connected;
     }
     return false;
@@ -204,7 +215,9 @@ export function createView(root = document) {
       const typeCell = element("td", "file-type", type.label);
       const sizeCell = element("td", "", formatSize(asset.size));
       const statusCell = element("td");
-      statusCell.append(element("span", `status-badge ${status.className}`, status.label));
+      const badge = element("span", `status-badge ${status.className}`, status.label);
+      if (asset.processingError) badge.title = String(asset.processingError);
+      statusCell.append(badge);
       const actionCell = element("td");
       const actions = element("div", "row-actions");
       const open = button("Open", "open", "row-action", id);
@@ -214,6 +227,17 @@ export function createView(root = document) {
       download.setAttribute("aria-label", `Download ${asset.name || "file"}`);
       download.append(icon("download"));
       actions.append(open, download);
+      if (canExtract(asset) && (!asset.extraction || asset.processingStatus === "failed")) {
+        const label = asset.processingStatus === "failed" ? "Retry extraction" : "Extract text";
+        const extract = button(label, "extract", "row-action", id);
+        extract.setAttribute("aria-label", `${label} for ${asset.name || "file"}`);
+        actions.append(extract);
+      }
+      if (asset.extraction) {
+        const preview = button("View text", "view-text", "row-action", id);
+        preview.setAttribute("aria-label", `View extracted text for ${asset.name || "file"}`);
+        actions.append(preview);
+      }
       actionCell.append(actions);
       row.append(nameCell, typeCell, sizeCell, statusCell, actionCell);
       tbody.append(row);
@@ -311,10 +335,38 @@ export function createView(root = document) {
     syncControls(latestState);
   }
 
+  function showExtraction(result) {
+    const dialog = find("#extraction-dialog");
+    find("#extraction-filename").textContent = result.source_name || "Untitled file";
+    const status = statusInfo(result.status);
+    const badge = find("#extraction-status");
+    badge.textContent = status.label;
+    badge.className = `status-badge ${status.className}`;
+    const ocrPages = Array.isArray(result.ocr_pages) ? result.ocr_pages : [];
+    const hint = find("#extraction-hint");
+    hint.textContent = result.error
+      ? String(result.error)
+      : ocrPages.length
+        ? `Pages ${ocrPages.join(", ")} need OCR. Text from other pages is shown below; OCR is not available yet.`
+        : result.status === "empty" ? "No text was found in this document." : "Extracted text is stored on this device. PDF table formatting may not be preserved.";
+    find("#extraction-text").textContent = result.text || "No extracted text available.";
+    if (!dialog.open) dialog.showModal();
+  }
+
+  function closeExtraction() {
+    const dialog = find("#extraction-dialog");
+    if (dialog.open) dialog.close();
+    for (const selector of ["#extraction-filename", "#extraction-status", "#extraction-hint", "#extraction-text"]) {
+      find(selector).textContent = "";
+    }
+  }
+
   return {
     render,
     notify,
     setBusy,
+    showExtraction,
+    closeExtraction,
     on(action, handler) {
       if (!handlers.has(action)) handlers.set(action, new Set());
       handlers.get(action).add(handler);

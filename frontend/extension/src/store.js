@@ -1,6 +1,6 @@
 const STORE_NAMES = ["assets", "operations", "settings"];
 
-/** Only metadata is persisted. Compound keys prevent cross-account reads/writes. */
+/** Metadata and extracted text are local to each account; originals remain in Drive. */
 export class LibraryStore {
   constructor(indexedDB = globalThis.indexedDB, name = "filewise-library-v1") {
     this.indexedDB = indexedDB;

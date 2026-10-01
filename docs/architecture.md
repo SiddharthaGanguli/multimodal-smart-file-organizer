@@ -4,9 +4,10 @@
 
 Filewise is a Manifest V3 Chrome extension. Each user connects their own Google account.
 Originals are uploaded directly to that account's Drive or registered as references to
-existing user-selected files. Production uses a static HTTPS Picker helper; no customer
-database installation or local server is required. GitHub Pages hosts the helper; developers
-can optionally serve it from a loopback-only Node process.
+existing user-selected files. Drive storage uses a static HTTPS Picker helper and needs no
+customer database or local server. Text extraction uses a Python companion on
+`127.0.0.1:8000`. GitHub Pages hosts the Picker helper; developers can optionally serve
+that separate helper from a loopback-only Node process.
 
 ```mermaid
 flowchart LR
@@ -16,10 +17,38 @@ flowchart LR
     E --> P[Static Picker helper: normal web iframe]
     P --> GP[Google-hosted Picker]
     E --> D[(User's Google Drive: originals)]
-    E --> M[(Account-scoped IndexedDB: metadata and recovery)]
+    E --> M[(Account-scoped IndexedDB: metadata, text and recovery)]
+    E -->|Document bytes, no Google token| A[Local Python extraction API]
+    A -->|Extraction result| E
 ```
 
 ## Modules
+
+### Document extraction (Milestone 2)
+
+```text
+Filewise -> src/extraction.js -> app/api/extraction.py
+    -> app/extractors/service.py
+    -> txt.py / docx.py / pdf.py
+    -> models.py: ExtractionResult
+    -> Filewise account-scoped IndexedDB
+
+CLI -> same extractors -> local JSON via extract_and_store
+```
+
+After a successful upload or import, Filewise downloads the authorized original and sends
+its bytes to `POST /extractions?filename=...`. Existing assets have an **Extract text** action.
+The API accepts only the shared extension origin and its request header, bounds uploads to
+20 MiB, limits expanded DOCX size, parses in a worker thread, and deletes temporary files.
+It accepts no server paths or remote URLs and receives no Google credentials.
+
+The extension checks the current account, permissions, version and available checksum
+before storing results. Changed versions invalidate old text; **View text** rechecks access.
+Extraction failure is separate from the completed Drive upload: retrying extraction does
+not create a second original. If the companion is stopped, Drive storage continues to work.
+See [document extraction](document-extraction.md) for commands and source layout. OCR is later.
+
+### Extension modules
 
 | Module | Responsibility |
 |---|---|
@@ -27,7 +56,8 @@ flowchart LR
 | `src/drive.js` | Drive REST client, per-file metadata, resumable transfer and bounded retry |
 | `src/validation.js` | File policy, full UTF-8 validation, signatures, DOCX ZIP structure, hashing |
 | `src/store.js` | IndexedDB transactions with account-scoped compound keys |
-| `src/library.js` | Asset registration, upload journal, recovery, permission-aware access |
+| `src/library.js` | Asset registration, upload journal, recovery, extraction and permission-aware access |
+| `src/extraction.js` | Send document bytes to the loopback companion and validate extraction results |
 | `src/picker.js` | Validated web-helper handshake, private result channel, selection validation |
 | `frontend/picker-bridge/picker.html`, `picker.js`, `config.js` | Static web helper, Google Picker SDK, allowed extension origins |
 | `frontend/picker-bridge/serve.mjs` | Development-only loopback server for the static helper |
@@ -46,7 +76,8 @@ permission ID plus a record ID. Session epochs invalidate old work after account
 New or refreshed tokens are checked against that account before authenticated requests.
 All incoming Picker IDs are re-read through Drive; messages cannot supply trusted metadata.
 Metadata is refreshed against current Drive access before rendering the connected library.
-Opening/downloading rechecks the local account record and current Drive permissions.
+Opening/downloading and viewing extracted text recheck the local account record and current
+Drive permissions. Account switches also close the extracted-text preview.
 
 OAuth tokens are never written into IndexedDB, storage.local, helper URLs, or logs. The
 extension validates the helper's ready message against its exact iframe window and configured
@@ -74,7 +105,7 @@ The hosted helper URL is
 `picker.js`, and `config.js`. The three HTTPS files have been verified to return HTTP 200
 and match the reviewed source byte for byte. Browser verification of the hosted integration
 passed with dummy OAuth; the user reports the authenticated workflow working. The extension
-implementation has not been merged into `main`.
+implementation was merged into `main` through PR #18.
 
 Optional local development uses `http://127.0.0.1:8765/picker.html`. The dependency-free
 server binds only to loopback and serves a fixed HTML/JavaScript/config allowlist. Neither
@@ -97,7 +128,8 @@ account/recovery edge cases have automated coverage but still need individual li
 If step 6 fails after Drive succeeds, the journal remains. Recovery fetches the same Drive ID,
 checks its size and available checksum, and finishes the metadata commit. It does not allocate
 a replacement ID. An unfinished transfer requires the user to reselect the same original;
-its checksum must match. Original bytes are never persisted locally by the app.
+its checksum must match. The extension never stores originals in IndexedDB. The extraction
+companion uses temporary files only while parsing and removes them after each request.
 
 Closing the extension tab may interrupt transfer. Keep it open until completion. Local
 IndexedDB is not a cross-device backup; uninstalling removes the local index/journal but
@@ -107,19 +139,22 @@ leaves originals in Drive. Duplicate suggestion/merging is a later, user-control
 
 The MVP accepts PDF, DOCX, UTF-8 TXT, JPG/JPEG and PNG up to 20 MB for upload/download
 through the extension. PDF/image validation checks signatures, not complete renderability.
-DOCX checks bounded ZIP structure and required entries without inflating arbitrary archive
-contents. Parser/OCR robustness and deeper corrupted-document handling remain extraction work.
+DOCX upload validation checks bounded ZIP structure and required entries without inflating
+arbitrary archive contents. The companion adds an expanded-size limit and reports parser
+failures. PDF table layout is not preserved reliably; OCR remains later work.
 Existing Drive registration trusts supported canonical MIME metadata and does not download
 all originals merely to build a file list. Native Google Docs/Sheets require future export support.
 
 ## Search and future intelligence
 
-The current search filters registered filenames locally. Assets are marked not processed.
-Later workers will derive text/OCR, categories, embeddings and search indexes ahead of queries.
+The current search filters registered filenames locally; extracted text is available for
+preview. Status distinguishes saved, extracted, empty, OCR-needed and failed documents.
+Later workers will derive OCR, categories, embeddings and search indexes ahead of queries.
 Automatic category folders must operate only within the user's authorized organization scope
 and preserve original content. Permission filters apply to every search and retrieval path.
 
-The Python FastAPI packages remain a scaffold for optional future hosted processing. PostgreSQL,
+The Python packages provide the loopback extraction API and standalone CLI. Hosted processing
+remains future work. PostgreSQL,
 pgvector, Redis and Celery are possible developer-operated infrastructure, not software users
 must install. The implementation boundary for later ML work remains to be chosen. Drive is the
 primary original store; the earlier private-server-original architecture has been superseded.
