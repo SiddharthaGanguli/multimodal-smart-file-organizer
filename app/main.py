@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from app.api.assets import router as assets_router
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -9,6 +10,8 @@ app = FastAPI(
     version="0.1.0",
     description="Backend API for the Multimodal Smart File Organizer.",
 )
+
+app.include_router(assets_router)
 
 
 @app.get("/", tags=["system"])

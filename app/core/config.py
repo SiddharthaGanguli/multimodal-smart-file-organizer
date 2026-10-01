@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     app_port: int = 8000
 
     storage_dir: str = "storage"
+    asset_database_path: str = "storage/assets.sqlite3"
+    max_upload_bytes: int = 20 * 1024 * 1024
+
     database_url: str = "postgresql+psycopg://smartfile:smartfile@localhost:5432/smartfile"
     redis_url: str = "redis://localhost:6379/0"
 
