@@ -17,7 +17,8 @@ flowchart LR
     E --> P[Static Picker helper: normal web iframe]
     P --> GP[Google-hosted Picker]
     E --> D[(User's Google Drive: originals)]
-    E --> M[(Account-scoped IndexedDB: metadata, text and recovery)]
+    E --> M[(Account-scoped IndexedDB: metadata, extracted text, OCR and recovery)]
+    E --> O[Local PDF rasterization and Tesseract workers]
     E -->|Document bytes, no Google token| A[Local Python extraction API]
     A -->|Extraction result| E
 ```
@@ -46,7 +47,7 @@ The extension checks the current account, permissions, version and available che
 before storing results. Changed versions invalidate old text; **View text** rechecks access.
 Extraction failure is separate from the completed Drive upload: retrying extraction does
 not create a second original. If the companion is stopped, Drive storage continues to work.
-See [document extraction](document-extraction.md) for commands and source layout. OCR is later.
+See [document extraction](document-extraction.md) for commands and source layout. On-demand OCR runs separately inside the extension without this companion.
 
 ### Extension modules
 
@@ -58,6 +59,7 @@ See [document extraction](document-extraction.md) for commands and source layout
 | `src/store.js` | IndexedDB transactions with account-scoped compound keys |
 | `src/library.js` | Asset registration, upload journal, recovery, extraction and permission-aware access |
 | `src/extraction.js` | Send document bytes to the loopback companion and validate extraction results |
+| `src/ocr/` | Bounded local OCR, page provenance, account-scoped cache and reading UI |
 | `src/picker.js` | Validated web-helper handshake, private result channel, selection validation |
 | `frontend/picker-bridge/picker.html`, `picker.js`, `config.js` | Static web helper, Google Picker SDK, allowed extension origins |
 | `frontend/picker-bridge/serve.mjs` | Development-only loopback server for the static helper |
@@ -105,7 +107,7 @@ The hosted helper URL is
 `picker.js`, and `config.js`. The three HTTPS files have been verified to return HTTP 200
 and match the reviewed source byte for byte. Browser verification of the hosted integration
 passed with dummy OAuth; the user reports the authenticated workflow working. The extension
-implementation was merged into `main` through PR #18.
+implementation and shared identity were merged into `main` in PRs #18 and #19.
 
 Optional local development uses `http://127.0.0.1:8765/picker.html`. The dependency-free
 server binds only to loopback and serves a fixed HTML/JavaScript/config allowlist. Neither
@@ -141,7 +143,8 @@ The MVP accepts PDF, DOCX, UTF-8 TXT, JPG/JPEG and PNG up to 20 MB for upload/do
 through the extension. PDF/image validation checks signatures, not complete renderability.
 DOCX upload validation checks bounded ZIP structure and required entries without inflating
 arbitrary archive contents. The companion adds an expanded-size limit and reports parser
-failures. PDF table layout is not preserved reliably; OCR remains later work.
+failures. PDF table layout is not preserved reliably. OCR adds bounded local rendering and
+recognition for images and PDFs; see [OCR pipeline](ocr-pipeline.md).
 Existing Drive registration trusts supported canonical MIME metadata and does not download
 all originals merely to build a file list. Native Google Docs/Sheets require future export support.
 
@@ -149,7 +152,8 @@ all originals merely to build a file list. Native Google Docs/Sheets require fut
 
 The current search filters registered filenames locally; extracted text is available for
 preview. Status distinguishes saved, extracted, empty, OCR-needed and failed documents.
-Later workers will derive OCR, categories, embeddings and search indexes ahead of queries.
+On-demand OCR stores its own status and page text without changing extraction status.
+Later work will connect automatic OCR fallback and add categories, embeddings and search indexes.
 Automatic category folders must operate only within the user's authorized organization scope
 and preserve original content. Permission filters apply to every search and retrieval path.
 

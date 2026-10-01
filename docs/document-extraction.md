@@ -68,13 +68,15 @@ After installing the Python dependencies, run this from the repository root:
 ```
 
 Keep the terminal open while extracting. Reload Filewise at `chrome://extensions` after
-updating its manifest, then reopen the extension tab. Version 0.2.0 keeps the shared
+updating its manifest, then reopen the extension tab. Version 0.2.1 keeps the shared
 extension ID `llobmhbiebleflpmbfdobhbkecbgefab`.
 
 - New TXT, DOCX and PDF uploads or imports trigger extraction automatically.
 - Existing library files have **Extract text**; **View text** opens the saved result.
 - If the service is stopped, the original stays in Drive. Start it and select **Retry extraction**.
-- Scanned PDF pages show **OCR needed**; actual OCR is not implemented yet.
+- Scanned PDF pages show **OCR needed**. Close the preview and choose **Read scan**
+  to run local OCR, or **View OCR text** to reopen saved OCR results. OCR is separate
+  from the companion's extracted text; see [OCR usage](ocr-pipeline.md).
 
 The extension downloads the authorized Drive file and sends its bytes to the companion.
 The companion deletes the temporary original after parsing and returns schema-1 JSON.

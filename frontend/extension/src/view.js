@@ -1,3 +1,4 @@
+import { OCR_TYPES } from "./ocr/pipeline.js";
 import { canExtract } from "./extraction.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -134,7 +135,7 @@ export function createView(root = document) {
     if (["setup", "close-picker", "close-extraction"].includes(action)) return false;
     if (busyOverride || state.busy) return true;
     if (action === "connect") return !state.configured;
-    if (["upload", "import", "folder", "refresh", "switch", "disconnect", "retry", "open", "download", "extract", "view-text"].includes(action)) {
+    if (["upload", "import", "folder", "refresh", "switch", "disconnect", "retry", "open", "download", "ocr", "extract", "view-text"].includes(action)) {
       return !state.configured || !state.connected;
     }
     return false;
@@ -218,6 +219,11 @@ export function createView(root = document) {
       const badge = element("span", `status-badge ${status.className}`, status.label);
       if (asset.processingError) badge.title = String(asset.processingError);
       statusCell.append(badge);
+      const ocrStatus = state.ocr?.[id];
+      if (ocrStatus) {
+        const label = { complete: "Text ready", needs_review: "Review text", empty: "No text", partial: "Some text", failed: "OCR failed", cancelled: "OCR cancelled" }[ocrStatus];
+        statusCell.append(element("span", "ocr-badge", label || ocrStatus));
+      }
       const actionCell = element("td");
       const actions = element("div", "row-actions");
       const open = button("Open", "open", "row-action", id);
@@ -227,6 +233,11 @@ export function createView(root = document) {
       download.setAttribute("aria-label", `Download ${asset.name || "file"}`);
       download.append(icon("download"));
       actions.append(open, download);
+      if (OCR_TYPES.includes(asset.mimeType)) {
+        const read = button(ocrStatus ? "View OCR text" : asset.mimeType === "application/pdf" ? "Read scan" : "Read text", "ocr", "row-action", id);
+        read.setAttribute("aria-label", `${ocrStatus ? "View" : "Read"} OCR text in ${asset.name || "file"}`);
+        actions.append(read);
+      }
       if (canExtract(asset) && (!asset.extraction || asset.processingStatus === "failed")) {
         const label = asset.processingStatus === "failed" ? "Retry extraction" : "Extract text";
         const extract = button(label, "extract", "row-action", id);
@@ -347,7 +358,7 @@ export function createView(root = document) {
     hint.textContent = result.error
       ? String(result.error)
       : ocrPages.length
-        ? `Pages ${ocrPages.join(", ")} need OCR. Text from other pages is shown below; OCR is not available yet.`
+        ? `Pages ${ocrPages.join(", ")} need OCR. Text from other pages is shown below. Close this preview and choose Read scan (or View OCR text) to read scanned pages on this device.`
         : result.status === "empty" ? "No text was found in this document." : "Extracted text is stored on this device. PDF table formatting may not be preserved.";
     find("#extraction-text").textContent = result.text || "No extracted text available.";
     if (!dialog.open) dialog.showModal();

@@ -75,7 +75,10 @@ test("extension requests per-file access without content scripts or broad Drive 
   assert.equal(manifest.content_scripts, undefined);
   assert.equal(manifest.sandbox, undefined, "Picker must have its normal web origin, not an inherited opaque sandbox");
   assert.equal(manifest.content_security_policy.sandbox, undefined);
-  assert.ok(!manifest.content_security_policy.extension_pages.includes("unsafe"));
+  const policy = manifest.content_security_policy.extension_pages;
+  assert.ok(!policy.includes("'unsafe-eval'") && !policy.includes("'unsafe-inline'"));
+  assert.match(policy, /script-src 'self' 'wasm-unsafe-eval';/);
+  assert.match(policy, /worker-src 'self';/);
   const frameSources = manifest.content_security_policy.extension_pages.match(/(?:^|;)\s*frame-src\s+([^;]+)/)?.[1].split(/\s+/) || [];
   assert.ok(frameSources.includes("http://127.0.0.1:8765"));
   assert.ok(frameSources.includes(getPickerBridgeUrl(CONFIG.googlePickerBridgeUrl).origin), "Configured helper origin must be allowed by the extension CSP");

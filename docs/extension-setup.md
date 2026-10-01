@@ -52,7 +52,7 @@ Sources: [Chrome OAuth](https://developer.chrome.com/docs/extensions/how-to/inte
 
 ## Text extraction companion
 
-Filewise 0.2.0 retains the shared extension ID. Reload it at `chrome://extensions` after
+Filewise 0.2.1 retains the shared extension ID. Reload it at `chrome://extensions` after
 updating, then close and reopen its tab so the new scripts and localhost permission apply.
 
 From the repository root on Windows, install Python 3.11-3.13 dependencies once:
@@ -208,9 +208,10 @@ existing child or recursively import the folder. Pick existing files explicitly.
 `drive.file` permission boundary, not an entire-Drive crawler.
 
 Google-native Docs/Sheets/Slides require a later export workflow; this milestone handles
-uploaded original file formats. Automatic classification, category subfolders, OCR and
-meaning-based search remain later milestones. Status distinguishes saved files, extracted
-text, empty documents, OCR-needed pages and extraction failures.
+uploaded original file formats. Version 0.2.1 includes **Read text** for English OCR of images
+and **Read scan** for PDFs; see [OCR usage, limits and integration](ocr-pipeline.md). Close Filewise
+tabs and reload the extension to update its database and bundled workers. Automatic
+classification, category subfolders and meaning-based search remain later milestones.
 
 ## Where information lives
 

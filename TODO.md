@@ -47,7 +47,7 @@ The hosted Picker accepts both IDs. The user confirmed the shared build works on
 second device and requested merging PR #19. See docs/shared-extension-id.md. Detailed live failure/recovery checks
 remain separate from the original successful workflow confirmation.
 
-## Milestone 2 — Document extraction
+## Milestone 2 — Document extraction (issue #3; teammate work merged in PR #20)
 - [x] TXT extraction
 - [x] DOCX extraction
 - [x] Text-based PDF extraction
@@ -63,14 +63,20 @@ Implemented with a loopback Python companion and a separate CLI. Filewise stores
 results in account-scoped IndexedDB; the CLI saves JSON. The companion retains no originals
 or results and receives no Google tokens. Drive storage works when the companion is stopped;
 extraction can be retried after it starts. See [the extraction guide](docs/document-extraction.md)
-for setup and OCR-detection limits. Actual OCR remains Milestone 3.
+for setup and OCR-detection limits. On-demand OCR is implemented separately in Milestone 3 below.
 
-## Milestone 3 — OCR
-- [ ] Integrate Tesseract/pytesseract
-- [ ] OCR images
-- [ ] OCR scanned PDF pages
-- [ ] Store OCR text and page references
-- [ ] Handle unreadable inputs safely
+## Milestone 3 — OCR (issue #4)
+- [x] Integrate local Tesseract via Tesseract.js/WASM, with bundled English data
+- [x] OCR JPG/JPEG and PNG images
+- [x] OCR scanned PDF pages with bounded PDF.js rendering
+- [x] Store account-scoped OCR text, source versions and original page references
+- [x] Handle unreadable, empty, partial, cancelled and failed inputs explicitly
+- [x] Verify clear/degraded examples and scanned PDFs with real packaged OCR
+- [x] Test cancellation, limits, account isolation, permission changes and database migration
+- [x] Document a separate OCR interface for issue #3 integration
+- [x] Confirm live PDF OCR displays page results (maintainer shared four-page output on 2026-10-01)
+- [x] Verify corrected column order on the actual four-page PDF in the installed extension (0.2.1, 2026-10-01)
+- [ ] Complete the remaining live Drive OCR checks (docs/ocr-pipeline.md)
 
 ## Milestone 4 — ML dataset
 - [ ] Freeze initial category definitions
