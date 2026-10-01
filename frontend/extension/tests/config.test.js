@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { createHash, createPublicKey } from "node:crypto";
 import { CONFIG, getPickerBridgeUrl, isConfigured } from "../config.js";
 import { validateSelection } from "../src/picker.js";
+import { ALLOWED_EXTENSION_ORIGINS } from "../../picker-bridge/config.js";
 
 const configuredManifest = { oauth2: { client_id: "test-client.apps.googleusercontent.com" } };
 const unconfiguredManifest = { oauth2: { client_id: "" } };
@@ -12,6 +14,19 @@ const configuredConfig = {
   maxUploadBytes: 20 * 1024 * 1024, uploadFolderName: "Filewise test uploads",
 };
 const unconfiguredConfig = { ...configuredConfig, googleProjectNumber: "", googlePickerApiKey: "" };
+
+test("shared builds retain a public-key identity accepted by the Picker helper", async () => {
+  const manifest = JSON.parse(await readFile(new URL("../manifest.json", import.meta.url)));
+  assert.ok(manifest.key, "A path-dependent ID cannot be shared with the same OAuth client");
+  const bytes = Buffer.from(manifest.key, "base64");
+  const key = createPublicKey({ key: bytes, type: "spki", format: "der" });
+  assert.equal(key.asymmetricKeyType, "rsa");
+  assert.ok(key.asymmetricKeyDetails.modulusLength >= 2048);
+  const id = [...createHash("sha256").update(bytes).digest("hex").slice(0, 32)]
+    .map(value => String.fromCharCode(97 + parseInt(value, 16))).join("");
+  assert.equal(id, "llobmhbiebleflpmbfdobhbkecbgefab", "Changing this ID requires a coordinated OAuth migration");
+  assert.ok(ALLOWED_EXTENSION_ORIGINS.includes(`chrome-extension://${id}`));
+});
 
 test("unconfigured builds cannot start OAuth and configured public values enable setup", () => {
   assert.equal(isConfigured(configuredManifest, unconfiguredConfig), false);

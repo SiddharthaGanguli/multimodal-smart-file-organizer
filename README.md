@@ -26,6 +26,9 @@ for the hosted integration, and the user reports the end-to-end Drive workflow w
 
 **Start here: [extension setup and live acceptance checklist](docs/extension-setup.md).**
 Load `frontend/extension` as an unpacked extension through `chrome://extensions`.
+Version 0.1.3 pins the shared ID `llobmhbiebleflpmbfdobhbkecbgefab` so GitHub downloads can
+use the same OAuth registration on every device. Users do not configure IDs themselves.
+See [shared identity and installation](docs/shared-extension-id.md) for setup and migration.
 Use the hosted helper for **Add from Drive** and folder selection. A loopback helper is
 available for optional local development; see the setup guide for its configuration and
 launcher. See the setup guide for Google configuration and additional live failure/recovery

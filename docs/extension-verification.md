@@ -8,7 +8,7 @@ The existing backend-local upload PR #17 was not merged.
 
 | Check | Result |
 |---|---|
-| Node unit/integration tests (Node 24.19.0) | 112 passed, 0 failed |
+| Node unit/integration tests (Node 24.19.0) | 113 passed, 0 failed, including the shared-identity regression |
 | Browser smoke with real DOM and IndexedDB | 12 checks passed, no page errors |
 | Existing Python backend health test | 1 passed |
 | JavaScript syntax and Git whitespace checks | Passed |
@@ -26,6 +26,22 @@ The existing backend-local upload PR #17 was not merged.
 | Live hosted Add from Drive | User reports working after the version 0.1.2 reload and file-selection instructions |
 | Live persistence, search, and download | User reports the file remains listed/searchable after closing and reopening Filewise, and the downloaded file opens correctly; exact-byte comparison not confirmed |
 | Live folder selection and upload destination | User replied "now all working" after the folder-selection/upload check and requested a PR for issue #2 on 2026-10-01 |
+| Shared identity, version 0.1.3 | Actual Chromium installs in two different folders and fresh profiles both report `llobmhbiebleflpmbfdobhbkecbgefab`; configuration checks pass |
+| Shared Google OAuth client | New public client ID supplied by the maintainer and configured; authenticated second-device test still pending |
+| Published shared-ID helper allowlist | Hosted `config.js` returns HTTP 200 and includes both the original and shared extension IDs |
+
+## Cross-device identity correction
+
+After PR #18 merged, the user reported `Bad client id` on another computer and confirmed
+its extension ID differed from the original. Version 0.1.3 pins a public RSA key in the
+manifest and uses the new OAuth client supplied after the maintainer registered that shared
+ID. The Picker allowlist retains the original ID and adds the shared ID.
+
+All 113 Node tests pass. Two actual installed-extension probes, using separate copied folders
+and fresh Chromium profiles, independently return the same shared ID and configured state.
+The report is `.pr-reviews/shared-id-check-1790853901309/report.json` in the original workspace.
+These probes do not authorize a real Google account. See [shared identity setup](shared-extension-id.md)
+for rollout steps and the remaining authenticated check on the user's other device.
 
 The browser workflow uses mocked Chrome Identity and Drive responses. It verifies uploads
 and downloads preserve bytes, metadata survives reload, accounts are isolated, imports are
