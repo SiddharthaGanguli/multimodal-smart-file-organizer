@@ -107,7 +107,7 @@ database accounts, download embedding weights, or configure OAuth IDs.
    This updates `search-config.js`, exact host permissions and `connect-src` together,
    preserving the shared extension identity/OAuth registration. Commit these public
    configuration changes for future builds after the endpoint works. Give users the
-   generated `dist/filewise-0.3.0.zip`, not the whole repository. Existing unpacked
+   generated `dist/filewise-0.3.1.zip`, not the whole repository. Existing unpacked
    installations must replace their files and click Reload in `chrome://extensions`.
 
 6. Test with your own permitted sample document: extract text/run OCR, open **Search
@@ -191,6 +191,14 @@ skip unless `SEARCH_TEST_DATABASE_URL` points to an isolated migrated test datab
 with the runtime role. Never run tests against the production database.
 Browser fixtures exercise the real UI with mocked Google/hosted responses; real
 ONNX inference and database authorization are tested separately.
+
+The workflow also runs the Chromium browser suite. Recovery regressions cover
+closing/reopening search during a pending Drive check, expired credentials and
+invalid service configuration. A cancelled operation cannot keep the next search
+locked. Drive outages and expired authentication surface as errors rather than
+false "no matches" results. An invalid search URL leaves Drive connection and
+filename search available. These fixes do not provision the hosted endpoint;
+an empty `SEARCH_API_URL` still requires the maintainer deployment steps above.
 
 Sources: [MiniLM model card](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2),
 [pgvector](https://github.com/pgvector/pgvector),

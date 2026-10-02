@@ -36,7 +36,7 @@ For distribution, build the clean extension-only ZIP with
 `python frontend/extension/tools/package_extension.py`; both ZIP and unpacked files
 must fit within 10 MB. See [packaging and installation](docs/extension-packaging.md).
 Developers can also load `frontend/extension` through `chrome://extensions`.
-Version 0.3.0 retains the shared ID `llobmhbiebleflpmbfdobhbkecbgefab` so GitHub downloads can
+Version 0.3.1 retains the shared ID `llobmhbiebleflpmbfdobhbkecbgefab` so GitHub downloads can
 use the same OAuth registration on every device. Users do not configure IDs themselves.
 See [shared identity and installation](docs/shared-extension-id.md) for setup and migration.
 Use the hosted helper for **Add from Drive** and folder selection. A loopback helper is

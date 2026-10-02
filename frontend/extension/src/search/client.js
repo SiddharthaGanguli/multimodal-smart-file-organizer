@@ -12,10 +12,12 @@ export class SearchClient {
   }
 
   async request(operation, body = {}, signal) {
+    signal?.throwIfAborted();
     if (!["index", "query", "status", "forget"].includes(operation)) throw new Error("Unknown search operation.");
     await this.auth.assert(this.session);
     const token = await this.auth.tokenFor(this.session);
     await this.auth.assert(this.session);
+    signal?.throwIfAborted();
     let response;
     try {
       response = await this.fetchImpl(`${this.origin}/v1/search/${operation}`, {
@@ -31,6 +33,7 @@ export class SearchClient {
     }
     await this.auth.assert(this.session);
     const result = await response.json().catch(() => null);
+    signal?.throwIfAborted();
     if (!response.ok) {
       if (response.status === 401) await this.auth.invalidate(token);
       const error = new Error(typeof result?.detail === "string" ? result.detail.slice(0, 300) : "Hosted search could not complete the request.");
