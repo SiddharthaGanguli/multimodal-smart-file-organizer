@@ -40,6 +40,8 @@ const server = createServer(async (request, response) => {
     if (pathname === "/config.js") {
       // Exercise the real validator against isolated public test values.
       body = `export const CONFIG = Object.freeze(${JSON.stringify(fixture.config)});\nexport ${getPickerBridgeUrl.toString()}\nexport ${isConfigured.toString()}\n`;
+    } else if (pathname === "/search-config.js") {
+      body = `export const SEARCH_API_URL = ${JSON.stringify(configured ? "https://search.example.test" : "")};`;
     } else if (pathname === "/manifest.json") {
       const manifest = JSON.parse(await readFile(path, "utf8"));
       manifest.oauth2.client_id = fixture.clientId;
@@ -63,6 +65,9 @@ let pickerRequests = 0;
 let extractionOffline = false;
 let uploadRequests = 0;
 const extractionRequests = [];
+const searchRequests = [];
+const searchIndex = new Map();
+let searchOffline = false;
 const bytes = Buffer.from('Filewise browser smoke: original UTF-8 bytes.\n<img src=x onerror="window.__extractionXss=1">\n');
 const file = (id, name, body = bytes) => ({ id, name, mimeType: "text/plain", size: String(body.length), parents: ["folder-A"], createdTime: "2026-01-01T00:00:00Z", modifiedTime: "2026-01-01T00:00:00Z", capabilities: { canDownload: true }, sha256Checksum: createHash("sha256").update(body).digest("hex"), _body: body });
 const canonical = data => { const { _body, ...publicData } = data; return publicData; };
@@ -145,6 +150,25 @@ try {
     if (!data) return send({ error: { errors: [{ reason: "notFound" }] } }, 404);
     if (url.searchParams.get("alt") === "media") return send(data._body, 200, { "content-type": data.mimeType, "content-length": String(data._body.length) });
     return send(canonical(data));
+  });
+  await context.route("https://search.example.test/**", async route => {
+    const request = route.request();
+    const headers = { "access-control-allow-origin": origin, "access-control-allow-methods": "POST,OPTIONS",
+      "access-control-allow-headers": "authorization,content-type,x-filewise-request", "content-type": "application/json" };
+    if (request.method() === "OPTIONS") return route.fulfill({ status: 204, headers });
+    assert.equal(request.method(), "POST");
+    assert.equal(request.headers()["x-filewise-request"], "search-v1");
+    const account = request.headers().authorization?.endsWith("B") ? "B" : "A";
+    const operation = new URL(request.url()).pathname.split("/").at(-1);
+    const body = request.postDataJSON(); searchRequests.push({ operation, account, body });
+    if (searchOffline) return route.abort("connectionrefused");
+    let result = {};
+    if (operation === "index") { searchIndex.set(`${account}:${body.file_id}`, body); result = { status: "indexed" }; }
+    if (operation === "query") result = { results: [...searchIndex.entries()].filter(([key]) => key.startsWith(`${account}:`))
+      .map(([, doc]) => ({ file_id: doc.file_id, source: doc.source, name: doc.source.name,
+        snippet: doc.parts[0].text, location: doc.parts[0].location, method: doc.parts[0].method, needs_review: false })) };
+    if (operation === "forget") for (const key of searchIndex.keys()) if (key.startsWith(`${account}:`)) searchIndex.delete(key);
+    return route.fulfill({ status: 200, headers, body: JSON.stringify(result) });
   });
   // Never contact a real companion service. Exercise raw-byte requests and CORS
   // with an isolated schema-1 fixture; Google tokens must stay in the extension.
@@ -323,6 +347,49 @@ try {
     assert.equal(await page.locator("#extraction-text").textContent(), bytes.toString("utf8"));
     assert.equal(extractionRequests.length, 1);
     await page.locator('[data-action="close-extraction"]').click();
+  });
+  await check("Hosted search requires opt-in, indexes extracted text and renders safe source snippets", async () => {
+    assert.equal(searchRequests.length, 0, "No hosted requests before explicit opt-in");
+    await page.locator('[data-action="contents-search"]').click(); await idle();
+    assert.equal(await page.locator("#search-consent").isVisible(), true);
+    await page.locator("#search-enable").click();
+    await page.waitForFunction(() => !document.querySelector("#search-update").disabled);
+    assert.equal(searchRequests.length, 0, "Enabling does not upload text automatically");
+    await page.locator("#search-update").click();
+    await page.waitForFunction(() => document.querySelector("#search-status").textContent.includes("Updated 1"));
+    await page.locator("#search-query").fill("travel reimbursement");
+    await page.locator("#search-submit").click();
+    await page.waitForFunction(() => document.querySelectorAll(".search-hit").length === 1);
+    assert.equal(await page.locator(".search-snippet").textContent(), bytes.toString("utf8"));
+    assert.equal(await page.locator(".search-snippet img").count(), 0);
+    assert.equal(await page.evaluate(() => window.__extractionXss), undefined);
+    await page.screenshot({ path: join(output, "semantic-search.png"), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await page.locator("#search-dialog").evaluate(el => el.scrollWidth <= el.clientWidth), true);
+    await page.screenshot({ path: join(output, "semantic-search-mobile.png"), fullPage: true });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.locator("#search-close").click();
+  });
+  await check("Hosted search consent survives reload; outage clears prior hits and preserves filename search", async () => {
+    await page.reload(); await page.waitForFunction(() => document.querySelector(".file-name")); await idle();
+    await page.locator('[data-action="contents-search"]').click(); await idle();
+    assert.equal(await page.locator("#search-consent").isVisible(), false);
+    searchOffline = true;
+    await page.locator("#search-query").fill("travel"); await page.locator("#search-submit").click();
+    await page.waitForFunction(() => document.querySelector("#search-status").textContent.includes("unavailable"));
+    assert.equal(await page.locator(".search-hit").count(), 0); searchOffline = false;
+    await page.locator("#search-close").click();
+    await page.locator("#file-search").fill("meeting"); assert.equal(await page.locator(".file-name").count(), 1);
+    await page.locator("#file-search").fill("");
+  });
+  await check("Deleting hosted search removes consent and index without changing original Drive files", async () => {
+    const originalCount = remote.size;
+    await page.locator('[data-action="contents-search"]').click(); await idle();
+    await page.locator("#search-forget").click();
+    await page.waitForFunction(() => document.querySelector("#search-status").textContent.includes("index deleted"));
+    assert.equal(searchIndex.size, 0); assert.equal(remote.size, originalCount);
+    assert.equal(await page.locator("#search-consent").isVisible(), true);
+    await page.locator("#search-close").click();
   });
   await check("Download returns the original byte-for-byte", async () => {
     const waiting = page.waitForEvent("download");

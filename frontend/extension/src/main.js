@@ -9,6 +9,10 @@ import { OcrLibrary } from "./ocr/library.js";
 import { recognize } from "./ocr/browser.js";
 import { createOcrView } from "./ocr/view.js";
 import { LocalExtractor, canExtract } from "./extraction.js";
+import { SEARCH_API_URL } from "../search-config.js";
+import { SearchClient } from "./search/client.js";
+import { SearchLibrary } from "./search/library.js";
+import { createSearchView } from "./search/view.js";
 
 const view = createView();
 const auth = new ChromeAuth();
@@ -23,6 +27,51 @@ let session = null;
 let library = null;
 let ocrLibrary = null;
 let ocrController = null;
+let searchLibrary = null;
+let searchController = null;
+const searchView = createSearchView({
+  onEnable: () => searchAction(async (active, signal) => {
+    await active.enable();
+    if (!signal.aborted) await showSearch(signal);
+    return "Hosted search enabled. Update the index to add your extracted text.";
+  }, "Enabling hosted search…"),
+  onIndex: () => searchAction(async (active, signal) => {
+    searchView.clearResults();
+    let indexed = 0, skipped = 0;
+    for (const asset of [...allAssets]) {
+      if (signal.aborted) throw signal.reason;
+      searchView.busy(true, `Indexing ${asset.name}…`);
+      try {
+        try { await active.index(asset.assetId, signal); } catch (error) {
+          if (error.status !== 429) throw error;
+          searchView.busy(true, "Search is rate limited. Continuing in one minute; close this window to cancel.");
+          await new Promise((resolve, reject) => {
+            const cancel = () => { clearTimeout(timer); reject(signal.reason); };
+            const timer = setTimeout(() => { signal.removeEventListener("abort", cancel); resolve(); }, 60000);
+            if (signal.aborted) cancel(); else signal.addEventListener("abort", cancel, { once: true });
+          });
+          await active.index(asset.assetId, signal);
+        }
+        indexed++;
+      } catch (error) {
+        if (error.message.startsWith("Extract text or run OCR")) { skipped++; continue; }
+        throw new Error(`${asset.name}: ${error.message}`);
+      }
+    }
+    return `Updated ${indexed} files. ${skipped} files need extraction or OCR first.`;
+  }, "Updating search index…"),
+  onQuery: query => searchAction(async (active, signal) => {
+    searchView.clearResults();
+    const result = await active.query(query, signal);
+    if (searchLibrary === active && !signal.aborted) searchView.results(result);
+  }, "Searching file contents…"),
+  onForget: () => searchAction(async (active, signal) => {
+    await active.forget(signal);
+    if (!signal.aborted) { searchView.clearResults(); await showSearch(signal); }
+    return "Hosted search index deleted. Your original Drive files are unchanged.";
+  }, "Deleting hosted search index…"),
+  onClose: () => { searchController?.abort(); searchView.clear(); },
+});
 const ocrView = createOcrView({ onCancel: () => ocrController?.abort(), onRetry: id => readText(id, true) });
 let allAssets = [];
 let busy = false;
@@ -38,6 +87,9 @@ function render() {
 }
 
 function clearAccount() {
+  searchController?.abort();
+  searchView.clear();
+  searchLibrary = null;
   ocrController?.abort();
   ocrView.clear();
   ocrLibrary = null;
@@ -90,6 +142,8 @@ async function connect(interactive = true) {
   });
   library = new Library({ store, drive, auth, session: boundSession, config: CONFIG, extractor });
   ocrLibrary = new OcrLibrary({ store, drive, auth, session: boundSession, recognize });
+  if (SEARCH_API_URL) searchLibrary = new SearchLibrary({ store, library,
+    client: new SearchClient({ baseUrl: SEARCH_API_URL, auth, session: boundSession }) });
   state.account = account;
   state.connected = true;
   await loadLibrary();
@@ -140,6 +194,36 @@ view.on("switch", () => perform("Switching account…", async () => {
   await connect();
 }));
 view.on("search", render);
+async function showSearch(signal) {
+  const active = searchLibrary;
+  const consent = active ? await active.enabled() : false;
+  if (active !== searchLibrary || signal?.aborted) return;
+  searchView.open({ configured: Boolean(active), origin: active?.client.origin, consent });
+}
+view.on("contents-search", () => perform("Opening content search…", showSearch));
+
+async function searchAction(action, message) {
+  if (searchController || !searchLibrary) return;
+  const active = searchLibrary;
+  const controller = new AbortController();
+  searchController = controller;
+  searchView.busy(true, message);
+  let completion;
+  try {
+    completion = await action(active, controller.signal);
+    await active.guard();
+  } catch (error) {
+    if (!controller.signal.aborted && searchLibrary === active) completion = error.message;
+  } finally {
+    if (searchController === controller) {
+      searchController = null;
+      if (searchLibrary === active && !controller.signal.aborted) {
+        // Preserve the result summary unless the action supplies another message.
+        searchView.busy(false, completion ?? document.getElementById("search-status").textContent);
+      }
+    }
+  }
+}
 function readText(id, force = false) {
   return perform("Reading text on this device…", async () => {
     const active = ocrLibrary;

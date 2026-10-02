@@ -1,0 +1,11 @@
+**
+!pyproject.toml
+!README.md
+!app/
+!app/**
+!deploy/
+!deploy/Search.Dockerfile
+!deploy/model-NOTICE.txt
+!deploy/model-LICENSE.txt
+**/__pycache__
+**/*.pyc
