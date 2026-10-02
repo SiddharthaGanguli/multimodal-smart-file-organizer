@@ -28,6 +28,7 @@ const fixtures = {
   configured: { clientId: "test-client.apps.googleusercontent.com", config: fixtureConfig },
   unconfigured: { clientId: "", config: { ...fixtureConfig, googleProjectNumber: "", googlePickerApiKey: "" } },
 };
+let searchFixtureUrl = "https://search.example.test";
 const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url, "http://localhost");
@@ -41,7 +42,7 @@ const server = createServer(async (request, response) => {
       // Exercise the real validator against isolated public test values.
       body = `export const CONFIG = Object.freeze(${JSON.stringify(fixture.config)});\nexport ${getPickerBridgeUrl.toString()}\nexport ${isConfigured.toString()}\n`;
     } else if (pathname === "/search-config.js") {
-      body = `export const SEARCH_API_URL = ${JSON.stringify(configured ? "https://search.example.test" : "")};`;
+      body = `export const SEARCH_API_URL = ${JSON.stringify(configured ? searchFixtureUrl : "")};`;
     } else if (pathname === "/manifest.json") {
       const manifest = JSON.parse(await readFile(path, "utf8"));
       manifest.oauth2.client_id = fixture.clientId;
@@ -68,6 +69,7 @@ const extractionRequests = [];
 const searchRequests = [];
 const searchIndex = new Map();
 let searchOffline = false;
+let searchExpired = false;
 const bytes = Buffer.from('Filewise browser smoke: original UTF-8 bytes.\n<img src=x onerror="window.__extractionXss=1">\n');
 const file = (id, name, body = bytes) => ({ id, name, mimeType: "text/plain", size: String(body.length), parents: ["folder-A"], createdTime: "2026-01-01T00:00:00Z", modifiedTime: "2026-01-01T00:00:00Z", capabilities: { canDownload: true }, sha256Checksum: createHash("sha256").update(body).digest("hex"), _body: body });
 const canonical = data => { const { _body, ...publicData } = data; return publicData; };
@@ -162,6 +164,7 @@ try {
     const operation = new URL(request.url()).pathname.split("/").at(-1);
     const body = request.postDataJSON(); searchRequests.push({ operation, account, body });
     if (searchOffline) return route.abort("connectionrefused");
+    if (searchExpired) return route.fulfill({ status: 401, headers, body: JSON.stringify({ detail: "Reconnect Google Drive to use search." }) });
     let result = {};
     if (operation === "index") { searchIndex.set(`${account}:${body.file_id}`, body); result = { status: "indexed" }; }
     if (operation === "query") result = { results: [...searchIndex.entries()].filter(([key]) => key.startsWith(`${account}:`))
@@ -382,6 +385,42 @@ try {
     await page.locator("#file-search").fill("meeting"); assert.equal(await page.locator(".file-name").count(), 1);
     await page.locator("#file-search").fill("");
   });
+  await check("Closing a search during Drive verification allows another search immediately", async () => {
+    let release, reached;
+    const paused = new Promise(resolve => { release = resolve; });
+    const waiting = new Promise(resolve => { reached = resolve; });
+    const pattern = "https://www.googleapis.com/drive/v3/files/*";
+    let held = false;
+    const hold = async route => {
+      if (!held) { held = true; reached(); await paused; }
+      await route.fallback();
+    };
+    await context.route(pattern, hold);
+    try {
+      await page.locator('[data-action="contents-search"]').click(); await idle();
+      await page.locator("#search-query").fill("first query"); await page.locator("#search-submit").click();
+      await waiting;
+      await page.locator("#search-close").click();
+      await page.locator('[data-action="contents-search"]').click(); await idle();
+      const before = searchRequests.filter(x => x.operation === "query").length;
+      await page.locator("#search-query").fill("second query"); await page.locator("#search-submit").click();
+      await page.waitForFunction(() => document.querySelectorAll(".search-hit").length === 1, null, { timeout: 3000 });
+      assert.equal(searchRequests.filter(x => x.operation === "query").length, before + 1);
+    } finally { release(); await context.unroute(pattern, hold); }
+    await page.locator("#search-close").click();
+  });
+  await check("Expired hosted credentials clear results and let the user reconnect Drive", async () => {
+    await page.locator('[data-action="contents-search"]').click(); await idle();
+    searchExpired = true;
+    await page.locator("#search-query").fill("travel"); await page.locator("#search-submit").click();
+    await page.waitForFunction(() => !document.querySelector("#search-dialog").open);
+    assert.equal(await page.locator(".search-hit").count(), 0);
+    assert.equal(await page.locator("#connect-button").isEnabled(), true);
+    searchExpired = false;
+    await page.locator("#connect-button").click();
+    await page.waitForFunction(() => document.querySelector(".file-name")?.textContent === "meeting-notes.txt");
+    await idle();
+  });
   await check("Deleting hosted search removes consent and index without changing original Drive files", async () => {
     const originalCount = remote.size;
     await page.locator('[data-action="contents-search"]').click(); await idle();
@@ -390,6 +429,17 @@ try {
     assert.equal(searchIndex.size, 0); assert.equal(remote.size, originalCount);
     assert.equal(await page.locator("#search-consent").isVisible(), true);
     await page.locator("#search-close").click();
+  });
+  await check("Invalid hosted search configuration does not break the Drive library", async () => {
+    searchFixtureUrl = "not-a-valid-url";
+    await page.reload();
+    await page.waitForFunction(() => document.querySelector(".file-name")?.textContent === "meeting-notes.txt");
+    await idle();
+    await page.locator('[data-action="contents-search"]').click(); await idle();
+    assert.match(await page.locator("#search-unconfigured").textContent(), /configuration is invalid/i);
+    await page.locator("#search-close").click();
+    searchFixtureUrl = "https://search.example.test";
+    await page.reload(); await page.waitForFunction(() => document.querySelector(".file-name")); await idle();
   });
   await check("Download returns the original byte-for-byte", async () => {
     const waiting = page.waitForEvent("download");

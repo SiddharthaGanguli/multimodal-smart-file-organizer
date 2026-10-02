@@ -1,6 +1,7 @@
 export function createSearchView({ onEnable, onIndex, onQuery, onForget, onClose }) {
   const find = id => document.getElementById(id);
   const dialog = find("search-dialog");
+  const unconfiguredMessage = find("search-unconfigured").textContent;
   let enabled = false;
   let busy = false;
   function controls() {
@@ -18,9 +19,10 @@ export function createSearchView({ onEnable, onIndex, onQuery, onForget, onClose
     if (enabled && !busy) onQuery(find("search-query").value);
   });
   return {
-    open({ configured, origin, consent }) {
+    open({ configured, origin, consent, configurationError }) {
       enabled = consent;
       find("search-unconfigured").hidden = configured;
+      find("search-unconfigured").textContent = configurationError || unconfiguredMessage;
       find("search-consent").hidden = !configured || enabled;
       find("search-workspace").hidden = !configured || !enabled;
       find("search-origin").textContent = origin || "";

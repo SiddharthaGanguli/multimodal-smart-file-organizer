@@ -57,10 +57,13 @@ export class SearchLibrary {
   }
 
   async index(assetId, signal) {
+    signal?.throwIfAborted();
     await this.requireConsent();
     const asset = await this.library.checkedAsset(assetId);
+    signal?.throwIfAborted();
     const ocr = await this.store.get("ocrResults", this.session.id, asset.driveFileId);
     await this.guard();
+    signal?.throwIfAborted();
     const result = await this.client.request("index", { file_id: asset.driveFileId,
       source: toSource(asset), parts: searchParts(asset, ocr) }, signal);
     await this.guard();
@@ -68,23 +71,28 @@ export class SearchLibrary {
   }
 
   async query(query, signal) {
+    signal?.throwIfAborted();
     await this.requireConsent();
     const response = await this.client.request("query", { query, limit: 10 }, signal);
+    signal?.throwIfAborted();
     if (!Array.isArray(response.results) || response.results.length > 20) throw new Error("Search returned invalid results.");
     const assets = await this.store.list("assets", this.session.id);
     await this.guard();
     const results = [];
     for (const hit of response.results) {
+      signal?.throwIfAborted();
       const asset = assets.find(value => value.driveFileId === hit.file_id);
       // Only show files explicitly registered in this profile's library.
       if (!asset || typeof hit.snippet !== "string" || hit.snippet.length > 10000 ||
           typeof hit.location !== "string" || hit.location.length > 150) continue;
       let current;
       try { current = await this.library.checkedAsset(asset.assetId); } catch (error) {
-        if (error.code === "accountChanged" || error.status === 401) throw error;
+        if (["accountChanged", "authRequired", "networkError", "invalidResponse"].includes(error.code) ||
+            error.status === 401 || error.retryable) throw error;
         continue;
       }
       await this.guard();
+      signal?.throwIfAborted();
       const source = toSource(current);
       if (!hit.source || ["name", "mime_type", "size", "modified_time"].some(key => hit.source[key] !== source[key]) ||
           (source.sha256 && hit.source.sha256 !== source.sha256)) continue;
@@ -95,6 +103,7 @@ export class SearchLibrary {
   }
 
   async forget(signal) {
+    signal?.throwIfAborted();
     await this.requireConsent();
     await this.client.request("forget", {}, signal);
     await this.guard();

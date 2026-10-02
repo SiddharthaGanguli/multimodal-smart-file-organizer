@@ -10,6 +10,29 @@ permissions:
   contents: read
 
 jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned browser test runtime outside the extension
+        run: |
+          npm install --prefix tmp/browser-runtime --no-save --package-lock=false playwright@1.62.1
+          node tmp/browser-runtime/node_modules/playwright/cli.js install --with-deps chromium
+      - name: Check Drive and hosted-search recovery in Chromium
+        env:
+          PLAYWRIGHT_MODULE: tmp/browser-runtime/node_modules/playwright/index.mjs
+        run: node frontend/extension/tests/browser-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-smoke-results
+          path: |
+            tmp/extension-tests/browser-*/report.json
+            tmp/extension-tests/browser-*/*.png
   search:
     runs-on: ubuntu-latest
     services:

@@ -29,6 +29,12 @@ let ocrLibrary = null;
 let ocrController = null;
 let searchLibrary = null;
 let searchController = null;
+let searchConfigurationError = "";
+function cancelSearch() {
+  searchController?.abort();
+  searchController = null;
+  searchView.clear();
+}
 const searchView = createSearchView({
   onEnable: () => searchAction(async (active, signal) => {
     await active.enable();
@@ -55,7 +61,7 @@ const searchView = createSearchView({
         indexed++;
       } catch (error) {
         if (error.message.startsWith("Extract text or run OCR")) { skipped++; continue; }
-        throw new Error(`${asset.name}: ${error.message}`);
+        throw Object.assign(new Error(`${asset.name}: ${error.message}`), { code: error.code, status: error.status });
       }
     }
     return `Updated ${indexed} files. ${skipped} files need extraction or OCR first.`;
@@ -70,7 +76,7 @@ const searchView = createSearchView({
     if (!signal.aborted) { searchView.clearResults(); await showSearch(signal); }
     return "Hosted search index deleted. Your original Drive files are unchanged.";
   }, "Deleting hosted search index…"),
-  onClose: () => { searchController?.abort(); searchView.clear(); },
+  onClose: cancelSearch,
 });
 const ocrView = createOcrView({ onCancel: () => ocrController?.abort(), onRetry: id => readText(id, true) });
 let allAssets = [];
@@ -87,9 +93,9 @@ function render() {
 }
 
 function clearAccount() {
-  searchController?.abort();
-  searchView.clear();
+  cancelSearch();
   searchLibrary = null;
+  searchConfigurationError = "";
   ocrController?.abort();
   ocrView.clear();
   ocrLibrary = null;
@@ -142,8 +148,14 @@ async function connect(interactive = true) {
   });
   library = new Library({ store, drive, auth, session: boundSession, config: CONFIG, extractor });
   ocrLibrary = new OcrLibrary({ store, drive, auth, session: boundSession, recognize });
-  if (SEARCH_API_URL) searchLibrary = new SearchLibrary({ store, library,
-    client: new SearchClient({ baseUrl: SEARCH_API_URL, auth, session: boundSession }) });
+  if (SEARCH_API_URL) {
+    try {
+      searchLibrary = new SearchLibrary({ store, library,
+        client: new SearchClient({ baseUrl: SEARCH_API_URL, auth, session: boundSession }) });
+    } catch {
+      searchConfigurationError = "Hosted search configuration is invalid. Ask the maintainer to configure its HTTPS service URL. Your Drive library and filename search still work.";
+    }
+  }
   state.account = account;
   state.connected = true;
   await loadLibrary();
@@ -198,7 +210,8 @@ async function showSearch(signal) {
   const active = searchLibrary;
   const consent = active ? await active.enabled() : false;
   if (active !== searchLibrary || signal?.aborted) return;
-  searchView.open({ configured: Boolean(active), origin: active?.client.origin, consent });
+  searchView.open({ configured: Boolean(active), origin: active?.client.origin, consent,
+    configurationError: searchConfigurationError });
 }
 view.on("contents-search", () => perform("Opening content search…", showSearch));
 
@@ -213,7 +226,16 @@ async function searchAction(action, message) {
     completion = await action(active, controller.signal);
     await active.guard();
   } catch (error) {
-    if (!controller.signal.aborted && searchLibrary === active) completion = error.message;
+    if (!controller.signal.aborted && searchLibrary === active) {
+      completion = error.message;
+      if (error.code === "authRequired" || error.status === 401) {
+        clearAccount();
+        await auth.disconnect(active.session).catch(() => {});
+        view.notify(error.message, "error");
+      } else if (error.code === "accountChanged") {
+        clearAccount(); view.notify(error.message, "error");
+      }
+    }
   } finally {
     if (searchController === controller) {
       searchController = null;
