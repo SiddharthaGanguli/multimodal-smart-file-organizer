@@ -39,3 +39,8 @@ def test_pooling_is_normalized_and_padding_does_not_change_embedding(model):
     assert batch == pytest.approx(solo, abs=2e-6)
     with pytest.raises(ValueError, match="256-token"):
         model.encode(["travel " * 300])
+
+
+def test_unknown_token_cannot_create_an_unbounded_passage(model):
+    with pytest.raises(ValueError, match="5,000 characters"):
+        chunks([Part(text="z" * 20000, location="document", method="extraction")], model.tokenizer)

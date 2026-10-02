@@ -15,6 +15,10 @@ def chunks(parts, tokenizer, size=224, overlap=32):
             text = part.text[first:last]
             if not text.strip():
                 continue
+            # Unknown tokens can represent arbitrarily long words. Bound stored
+            # passages too, rather than relying on the tokenizer to cap characters.
+            if len(text) > 5000:
+                raise ValueError("A passage exceeds 5,000 characters; split long unbroken text.")
             # Retokenizing an original span can split a partial word differently.
             # Shrink until the final encoded input is guaranteed not to truncate.
             while len(tokenizer.encode(text).ids) > 256 and last > first:

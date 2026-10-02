@@ -146,7 +146,8 @@ and `needs_review`. The extension prefers extracted PDF pages and fills missing
 pages from current OCR. Classifier work can consume the same text independently;
 labels and classification are not prerequisites for indexing.
 
-Limits: 1 MB request body, 200,000 text characters/256 chunks per file, source up
+Limits: 1 MB request body, 200,000 text characters/256 chunks per file, 5,000
+characters per passage (unbroken text beyond this is rejected), source up
 to 20 MiB, 1,000 indexed files/20,000 chunks per account, 10 index requests and 60
 other requests per operation/account/minute. Bulk indexing pauses once for a minute
 when rate limited and can be cancelled by closing the dialog. One model inference
