@@ -1,0 +1,6 @@
+outs:
+- md5: 05514355b5aab7c66b0b0d6510ba758f.dir
+  size: 57252695
+  nfiles: 3703
+  hash: md5
+  path: filewise-v1

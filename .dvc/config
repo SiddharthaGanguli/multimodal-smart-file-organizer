@@ -1,0 +1,8 @@
+[core]
+    analytics = false
+    remote = gdrive
+    autostage = false
+[cache]
+    type = copy
+['remote "gdrive"']
+    url = gdrive://1xmPY69LZ07IWkmCHA9e0nyMddMIHlYW8
