@@ -1,0 +1,13 @@
+# Demo capacity. Measure memory and latency before selecting a production plan.
+services:
+  - type: web
+    name: filewise-search
+    runtime: docker
+    plan: free
+    dockerfilePath: ./deploy/Search.Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeployTrigger: "off"
+    envVars:
+      - key: SEARCH_DATABASE_URL
+        sync: false

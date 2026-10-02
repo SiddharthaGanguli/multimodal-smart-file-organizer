@@ -102,12 +102,18 @@ not a real-world accuracy benchmark; the public receipt subset covers only one c
 - [ ] Test on OCR-derived text
 
 ## Milestone 6 — Text semantic search
-- [ ] Select and pin embedding model
-- [ ] Define tokenizer-aware chunking
-- [ ] Enable pgvector
-- [ ] Store model-specific vectors
-- [ ] Implement semantic retrieval
-- [ ] Build retrieval evaluation set
+- [x] Select and pin English MiniLM embedding model (server-side ONNX)
+- [x] Define tokenizer-aware chunking and source/page provenance
+- [x] Add pgvector schema, model-specific vectors and account row security
+- [x] Implement permission-aware semantic retrieval and index deletion
+- [x] Add explicit hosted-search opt-in and extension search UI
+- [x] Build synthetic retrieval evaluation set and CI database checks
+- [x] Keep packaged and unpacked extension below 10 MB
+- [ ] Provision Neon and Render; migrate the hosted database
+- [ ] Configure the deployed HTTPS search origin and distribute a new extension ZIP
+- [ ] Complete live-account search, permission-revocation and capacity checks
+
+Plan, contracts and deployment: [Hosted semantic search](docs/semantic-search.md).
 
 ## Milestone 7 — Gallery intelligence
 - [ ] Select and pin image-text model

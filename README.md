@@ -5,7 +5,7 @@ Original photos, documents and reports stay in that account. The extension recor
 and extracted document text locally, reads text from scans/images, and provides a foundation
 for classification, automatic Drive folders and content-aware search.
 
-## Current implementation: Drive library, extraction and OCR (issues #2, #3 and #4)
+## Current implementation: Drive library, extraction, OCR and text search
 
 `frontend/extension` is a Manifest V3 extension with:
 
@@ -20,6 +20,9 @@ for classification, automatic Drive folders and content-aware search.
 - Local English OCR for scanned PDFs and images, with page references, saved results,
   confidence/review states, cancellation, and retry. See [OCR usage and integration](docs/ocr-pipeline.md).
 - TXT, DOCX and PDF text extraction through a local Python companion, with retry and text preview.
+- Opt-in hosted English semantic search over extracted/OCR text, with source snippets,
+  page references and permission checks. **Deployment is required**; the default build has
+  no hosted endpoint. See [search architecture and deployment](docs/semantic-search.md).
 
 Drive storage and on-demand OCR work without Python, a database or a local server. **TXT, DOCX and embedded PDF text extraction need
 the local Python companion** described below. Google Cloud OAuth must be configured for a
@@ -33,7 +36,7 @@ For distribution, build the clean extension-only ZIP with
 `python frontend/extension/tools/package_extension.py`; both ZIP and unpacked files
 must fit within 10 MB. See [packaging and installation](docs/extension-packaging.md).
 Developers can also load `frontend/extension` through `chrome://extensions`.
-Version 0.2.2 retains the shared ID `llobmhbiebleflpmbfdobhbkecbgefab` so GitHub downloads can
+Version 0.3.0 retains the shared ID `llobmhbiebleflpmbfdobhbkecbgefab` so GitHub downloads can
 use the same OAuth registration on every device. Users do not configure IDs themselves.
 See [shared identity and installation](docs/shared-extension-id.md) for setup and migration.
 Use the hosted helper for **Add from Drive** and folder selection. A loopback helper is
@@ -52,7 +55,8 @@ The extension has not been released through the Chrome Web Store.
 | Active account | Chrome session storage |
 | OAuth tokens | Chrome Identity's managed cache and temporary memory |
 | OCR text, page references and provenance | Chrome IndexedDB, keyed by account and Drive file |
-| Labels and semantic index | To be implemented in later milestones |
+| Semantic text index (after opt-in) | Hosted PostgreSQL/pgvector, separated by verified account |
+| Classifier labels | Issue #6, independent work |
 
 Local metadata is specific to the Chrome profile and is not automatically synchronized
 across devices. Register existing files explicitly; choosing a folder is an upload-destination
@@ -128,12 +132,13 @@ filenames and folders from the hash-named objects stored there.
 
 1. Connect automatic OCR fallback to document extraction results.
 2. Expand the starter dataset with real labeled documents and train a TF-IDF + logistic-regression classifier.
-3. Add pretrained text and image embeddings and permission-aware semantic search.
+3. Deploy hosted text search, then add image embeddings and visual search.
 4. Use reviewed categories to organize authorized files into Drive subfolders.
 5. Add worker processing, synchronization, richer extension views, feedback, and monitoring.
 
-Filename search and on-demand OCR are implemented now. Automatic categorization/subfolders
-and semantic search remain future work. OCR does not automatically process every upload.
+Filename search, on-demand OCR and hosted text-search code are implemented now. Automatic
+categorization/subfolders and visual search remain future work. Hosted text search still needs
+deployment and a configured service URL. OCR does not automatically process every upload.
 The original proof of concept remains: find both a digital invoice and its photographed
 counterpart when searching for an invoice, and find a beach photo by its visual content.
 

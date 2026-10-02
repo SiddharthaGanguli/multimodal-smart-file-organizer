@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_BYTES = 10_000_000  # Decimal MB, for both the ZIP and its uncompressed contents.
-ENTRY_POINTS = ("manifest.json", "config.js", "app.html", "app.css")
+ENTRY_POINTS = ("manifest.json", "config.js", "search-config.js", "app.html", "app.css")
 
 
 def package_files(root=ROOT):

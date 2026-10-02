@@ -1,0 +1,8 @@
+Filewise downloads unmodified model weights and tokenizer for:
+sentence-transformers/all-MiniLM-L6-v2
+https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2
+Revision: 1110a243fdf4706b3f48f1d95db1a4f5529b4d41
+Model authors: the Sentence Transformers contributors.
+License: Apache License, Version 2.0 (model-LICENSE.txt).
+The model is included only in the hosted service image, not the Chrome extension.
+Filewise implements its own chunking and masked mean pooling around these assets.

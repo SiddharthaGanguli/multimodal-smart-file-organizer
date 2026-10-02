@@ -135,7 +135,7 @@ export function createView(root = document) {
     if (["setup", "close-picker", "close-extraction"].includes(action)) return false;
     if (busyOverride || state.busy) return true;
     if (action === "connect") return !state.configured;
-    if (["upload", "import", "folder", "refresh", "switch", "disconnect", "retry", "open", "download", "ocr", "extract", "view-text"].includes(action)) {
+    if (["upload", "import", "folder", "refresh", "switch", "disconnect", "retry", "open", "download", "ocr", "extract", "view-text", "contents-search"].includes(action)) {
       return !state.configured || !state.connected;
     }
     return false;

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Filewise — Your Drive Library",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Upload and organize a private library of files in your own Google Drive.",
   "minimum_chrome_version": "125",
   "permissions": [

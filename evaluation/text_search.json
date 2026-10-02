@@ -1,0 +1,40 @@
+{
+  "description": "Synthetic English retrieval fixtures authored for Filewise; no private documents. Small regression set, not a general accuracy benchmark.",
+  "documents": [
+    {"id":"travel","name":"receipt-104.pdf","text":"Corporate travel reimbursement. The employee purchased round-trip airline tickets from Delhi to Mumbai and stayed two nights at a hotel for a client meeting. The company will repay airfare and lodging expenses."},
+    {"id":"invoice","name":"acme-invoice.pdf","text":"Invoice for website development services. The total amount due is 25000 rupees. Payment must reach the vendor by 30 October. The invoice is unpaid and includes the bank transfer details."},
+    {"id":"rent","name":"agreement.pdf","text":"Apartment rental agreement. The tenant pays monthly rent of 18000 rupees and a refundable security deposit. The lease lasts twelve months. The landlord handles structural repairs."},
+    {"id":"medical","name":"visit-summary.pdf","text":"Fictional clinic visit summary. The patient reported a persistent cough and fever. The clinician recorded symptoms and requested a follow-up appointment. This sample contains no real patient data."},
+    {"id":"leave","name":"hr-policy.docx","text":"Employees receive twenty paid vacation days per year. Annual leave requests should be submitted to the manager at least two weeks before the holiday. Unused days can be carried forward within the stated limit."},
+    {"id":"warranty","name":"purchase-notes.txt","text":"Laptop warranty coverage lasts two years from purchase. Hardware defects are repaired without charge. Accidental liquid damage is excluded. Keep the purchase receipt when requesting support."},
+    {"id":"recipe","name":"weekend.txt","text":"Vegetable pasta recipe. Boil the noodles, saute tomatoes and peppers, and combine with olive oil and basil. Serve the meal warm with grated cheese."},
+    {"id":"backup","name":"operations.docx","text":"Database backup procedure. Create a nightly encrypted snapshot and store a copy offsite. Test restoration every month. Retain daily backups for thirty days."},
+    {"id":"meeting","name":"minutes.txt","text":"Product planning meeting. The team agreed to launch the new mobile application in December. Alice owns interface design and Bob is responsible for testing. The next review is on Friday."},
+    {"id":"insurance","name":"policy-car.pdf","text":"Vehicle insurance policy renewal. Coverage includes theft and collision damage. The policy expires next month and the renewal premium is payable before expiry."},
+    {"id":"tuition","name":"college-fees.pdf","text":"University tuition receipt. The student paid the first semester course fees and library charges. This receipt confirms successful payment to the college."},
+    {"id":"shipping","name":"order-582.txt","text":"Online furniture order. Delivery of the wooden desk is scheduled for Tuesday. Track the shipment using the courier tracking number. Assembly instructions are included."}
+  ],
+  "queries": [
+    {"query":"money spent flying for work", "relevant":["travel"]},
+    {"query":"hotel costs that my employer should repay", "relevant":["travel"]},
+    {"query":"unpaid bill for building a website", "relevant":["invoice"]},
+    {"query":"when should we transfer money to the developer", "relevant":["invoice"]},
+    {"query":"how much is the apartment security deposit", "relevant":["rent"]},
+    {"query":"tenant and landlord repair responsibilities", "relevant":["rent"]},
+    {"query":"doctor appointment for coughing and high temperature", "relevant":["medical"]},
+    {"query":"requesting time off for a holiday", "relevant":["leave"]},
+    {"query":"carry unused annual vacation days into next year", "relevant":["leave"]},
+    {"query":"free repair if my computer hardware breaks", "relevant":["warranty"]},
+    {"query":"does spilled water invalidate laptop coverage", "relevant":["warranty"]},
+    {"query":"cooking noodles with vegetables", "relevant":["recipe"]},
+    {"query":"recovering data from an encrypted snapshot", "relevant":["backup"]},
+    {"query":"how long do we keep daily database copies", "relevant":["backup"]},
+    {"query":"who will test the planned mobile app", "relevant":["meeting"]},
+    {"query":"renew coverage against car theft", "relevant":["insurance"]},
+    {"query":"proof that semester fees were paid", "relevant":["tuition"]},
+    {"query":"when will the ordered desk arrive", "relevant":["shipping"]},
+    {"query":"acme invoice", "relevant":["invoice"]},
+    {"query":"college fees", "relevant":["tuition"]}
+  ],
+  "negative_queries": ["volcanic eruptions on Jupiter", "breeding deep sea bioluminescent squid"]
+}

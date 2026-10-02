@@ -1,0 +1,68 @@
+name: Hosted semantic search
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  search:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.7-pg16-bookworm
+        env:
+          POSTGRES_DB: filewise_test
+          POSTGRES_PASSWORD: test-admin-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d filewise_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      SEARCH_MIGRATION_URL: postgresql://postgres:test-admin-only@localhost:5432/filewise_test
+      SEARCH_TEST_DATABASE_URL: postgresql://filewise_search:test-runtime-only@localhost:5432/filewise_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: pip install '.[search,dev]'
+      - name: Create isolated runtime role and migrate schema
+        run: |
+          python - <<'PY'
+          import os, psycopg
+          with psycopg.connect(os.environ['SEARCH_MIGRATION_URL']) as conn:
+              conn.execute("CREATE ROLE filewise_search LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'test-runtime-only'")
+          PY
+          python -m app.retrieval.migrate
+      - name: Download and verify pinned model
+        run: python -m app.retrieval.model --download
+      - run: python -m pytest -q
+      - run: python -m ruff check app tests evaluation frontend/extension/tools
+      - run: node --test frontend/extension/tests/*.test.js
+      - run: python evaluation/check_text_search.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: semantic-retrieval-evaluation
+          path: tmp/semantic-evaluation/report.json
+      - name: Build deployment image
+        run: docker build -f deploy/Search.Dockerfile -t filewise-search:test .
+      - name: Smoke test deployed image with runtime role and 512 MB memory limit
+        run: |
+          docker run --detach --name filewise-search-test --network host --memory 512m \
+            --env SEARCH_DATABASE_URL="$SEARCH_TEST_DATABASE_URL" filewise-search:test
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent http://localhost:10000/health > /tmp/search-health.json; then break; fi
+            sleep 2
+          done
+          python -c 'import json; assert json.load(open("/tmp/search-health.json")) == {"status": "ok"}'
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' --request POST http://localhost:10000/v1/search/query)" = 403
+          docker stats --no-stream filewise-search-test
+          docker stop filewise-search-test
