@@ -79,12 +79,19 @@ for setup and OCR-detection limits. On-demand OCR is implemented separately in M
 - [ ] Complete the remaining live Drive OCR checks (docs/ocr-pipeline.md)
 
 ## Milestone 4 — ML dataset
-- [ ] Freeze initial category definitions
-- [ ] Define labeled dataset schema
-- [ ] Collect permitted examples
-- [ ] Group related copies/versions
-- [ ] Create train/validation/test splits
-- [ ] Add leakage checks
+- [x] Define the eight-type v1 taxonomy and explicit category boundaries
+- [x] Define labeled dataset schema and source/extractor provenance
+- [x] Generate 1,600 explicitly synthetic English starter documents
+- [x] Collect 150 licensed CORD receipt references separately from model splits
+- [x] Group related copies, templates and image variants
+- [x] Create reproducible synthetic train/validation/test splits
+- [x] Add integrity, arithmetic, grouping and leakage checks
+- [x] Document dataset limitations and create 160 images for future OCR checks
+- [ ] Collect and review representative real examples across all supported categories
+- [ ] Freeze an independent real multiclass test set before production evaluation
+
+See [training instructions](training/README.md). Synthetic splits are workflow checks,
+not a real-world accuracy benchmark; the public receipt subset covers only one class.
 
 ## Milestone 5 — Document classifier
 - [ ] Train TF-IDF + Logistic Regression baseline

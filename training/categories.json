@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "dataset_scope": "English, single-purpose fictional documents for an initial eight-class text classification workflow. This taxonomy is a proposed project baseline, not an exhaustive definition of user documents.",
+  "unknown_policy": "Unsupported, ambiguous, unreadable, or mixed-purpose uploads require review. Needs Review is an application decision, not a trained ninth document type.",
+  "categories": [
+    {
+      "label": "marksheet",
+      "category": "education",
+      "display_name": "Marksheet",
+      "definition": "A student's assessed performance, including subject-level marks or grades.",
+      "include": ["subject marks statements", "exam result sheets", "academic transcripts containing assessed results"],
+      "exclude": ["completion certificates without assessed results", "admission letters", "attendance-only records"],
+      "boundary_rule": "A results table remains a marksheet even when its heading includes the word certificate."
+    },
+    {
+      "label": "educational_certificate",
+      "category": "education",
+      "display_name": "Educational certificate",
+      "definition": "An attestation of an educational qualification or completed course, without a subject-level result statement.",
+      "include": ["course completion certificates", "diploma attestations", "qualification awards"],
+      "exclude": ["marksheets", "exam timetables", "employment certificates", "admission letters"],
+      "boundary_rule": "A qualification award with detailed assessed results should be reviewed if both document purposes are substantial."
+    },
+    {
+      "label": "utility_bill",
+      "category": "bills_payments",
+      "display_name": "Utility bill",
+      "definition": "A provider's request for payment for metered or recurring household utility service.",
+      "include": ["electricity bills", "water bills", "piped-gas bills"],
+      "exclude": ["proof of a completed utility payment", "general merchandise invoices", "bank statements"],
+      "boundary_rule": "A utility bill is classified by its service and billing purpose, even when titled invoice; a payment-only acknowledgement is a receipt."
+    },
+    {
+      "label": "invoice",
+      "category": "bills_payments",
+      "display_name": "Invoice",
+      "definition": "A seller's itemized request for payment for supplied goods or non-utility services.",
+      "include": ["goods invoices", "consulting invoices", "repair service invoices"],
+      "exclude": ["utility bills", "payment receipts", "quotations", "purchase orders"],
+      "boundary_rule": "The sample must request payment; a document whose primary purpose is acknowledging settlement is a receipt."
+    },
+    {
+      "label": "receipt",
+      "category": "bills_payments",
+      "display_name": "Receipt",
+      "definition": "An acknowledgement that money was received for goods, services, fees, or a previous bill.",
+      "include": ["retail payment receipts", "fee payment acknowledgements", "utility payment receipts"],
+      "exclude": ["unpaid invoices", "unpaid utility bills", "bank account transaction histories"],
+      "boundary_rule": "Explicit completed payment is essential; a payable amount or due date alone does not establish a receipt."
+    },
+    {
+      "label": "land_record",
+      "category": "property_land",
+      "display_name": "Land record",
+      "definition": "A parcel-focused record of land identity, area, boundaries, recorded holder, and/or land-use details.",
+      "include": ["parcel register extracts", "landholding summaries", "survey and boundary records"],
+      "exclude": ["property payment receipts", "utility bills with an address", "sale deeds", "rental contracts", "property tax bills"],
+      "boundary_rule": "This initial class covers parcel records, not every property document. Sale deeds and jurisdiction-specific legal forms need separate permitted data and expert labeling."
+    },
+    {
+      "label": "bank_statement",
+      "category": "banking",
+      "display_name": "Bank statement",
+      "definition": "An account-period summary with opening/closing balances and a sequence of account transactions.",
+      "include": ["deposit account statements", "transaction history statements with running balances"],
+      "exclude": ["single payment receipts", "loan contracts", "credit card bills", "investment reports"],
+      "boundary_rule": "An account transaction history is a bank statement even when individual rows mention invoices, utilities, or fees."
+    },
+    {
+      "label": "prescription",
+      "category": "medical",
+      "display_name": "Prescription",
+      "definition": "A clinician-authored medication-order document associated with a patient encounter.",
+      "include": ["prescription forms", "medication order sheets"],
+      "exclude": ["lab reports", "medical bills", "discharge summaries", "patient-generated medicine lists"],
+      "boundary_rule": "The present synthetic examples contain fictional medicine placeholders without dosage or treatment instructions. They do not establish coverage of real prescribing language, handwriting, or clinical layouts."
+    }
+  ]
+}

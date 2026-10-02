@@ -1,0 +1,6 @@
+# Separate tool environment: keep DVC's dependencies out of the application venv.
+dvc[gdrive]==3.67.1
+dvc-gdrive==3.0.1
+# PyDrive2 currently caps pyOpenSSL; pin the newest compatible version so the
+# resolver does not pair older pyOpenSSL 22 with incompatible cryptography 50.
+pyOpenSSL==24.2.1

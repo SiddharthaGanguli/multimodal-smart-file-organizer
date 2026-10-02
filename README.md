@@ -107,10 +107,27 @@ The document extraction workflow was merged in PR #20.
 The separate CLI still saves JSON: `python -m app.extractors path/to/document.pdf`.
 See the [extraction guide](docs/document-extraction.md) for the small module layout and limits.
 
+## Dataset (Milestone 4)
+
+The `filewise-v1` dataset is versioned with DVC and uploaded to the
+[Google Drive DVC folder](https://drive.google.com/drive/folders/1xmPY69LZ07IWkmCHA9e0nyMddMIHlYW8).
+It contains synthetic starter examples across eight document types, plus separate
+OCR test images and public receipt references. See the [dataset guide](training/README.md)
+for contents, limitations, DVC installation, and Google authorization setup.
+
+After setup, download the dataset from the repository root:
+
+```powershell
+.venv-dvc\Scripts\dvc.exe pull storage/datasets/filewise-v1.dvc
+```
+
+Your Google account needs access to the Drive folder. DVC restores the original
+filenames and folders from the hash-named objects stored there.
+
 ## Later milestones
 
 1. Connect automatic OCR fallback to document extraction results.
-2. Build a labeled dataset and train a TF-IDF + logistic-regression classifier.
+2. Expand the starter dataset with real labeled documents and train a TF-IDF + logistic-regression classifier.
 3. Add pretrained text and image embeddings and permission-aware semantic search.
 4. Use reviewed categories to organize authorized files into Drive subfolders.
 5. Add worker processing, synchronization, richer extension views, feedback, and monitoring.

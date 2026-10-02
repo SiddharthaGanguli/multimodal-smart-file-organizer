@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "reviewed_on": "2026-10-01",
+  "scope": "Public source review for an eight-label Filewise document-classification starter dataset. This is not an exhaustive search or a claim of full real-world category coverage.",
+  "sources": [
+    {
+      "source_id": "naver-clova-ix/cord-v2",
+      "title": "CORD: A Consolidated Receipt Dataset for Post-OCR Parsing",
+      "publisher": "NAVER CLOVA; Park et al., 2019",
+      "decision": "accepted_as_separate_receipt_reference",
+      "homepage": "https://github.com/clovaai/cord",
+      "dataset_url": "https://huggingface.co/datasets/naver-clova-ix/cord-v2",
+      "dataset_revision": "7f0115a4b758a71d6473b8d085751692da2fef98",
+      "license": "CC-BY-4.0",
+      "license_url": "https://github.com/clovaai/cord/blob/master/LICENSE-CC-BY",
+      "license_evidence_url": "https://github.com/clovaai/cord/blob/master/README.md",
+      "license_evidence": "The original publisher explicitly licenses this work under CC BY 4.0 and links the official Hugging Face v2 dataset. The official dataset_infos.json also identifies the data license as Creative Commons Attribution 4.0 International License.",
+      "license_metadata_url": "https://huggingface.co/datasets/naver-clova-ix/cord-v2/blob/7f0115a4b758a71d6473b8d085751692da2fef98/dataset_infos.json",
+      "label_mapping": {"publisher_receipts": "receipt"},
+      "language_scope": "Indonesian receipts, sometimes including English terms; individual language detection was not performed.",
+      "text_origin": "publisher_ocr_annotation",
+      "limitations": [
+        "Only one of the eight target labels is represented.",
+        "This collection does not establish general accuracy on Indian documents or the eight-class model.",
+        "The public valid_line annotation contains selected semantic fields rather than every visible word on a receipt.",
+        "Transcriptions are publisher ground truth; Filewise OCR has not been run.",
+        "Publisher train/validation/test identities are retained. Merchant/template families are not supplied and must not be assumed independent.",
+        "Sample selection uses deterministic initial rows of each official split and is not a statistically representative sample.",
+        "Images are downloaded from the publisher's Hugging Face dataset-viewer JPEG representation; they are not claimed byte-identical to the original parquet-embedded images."
+      ],
+      "attribution_requirement": "Retain dataset title, author attribution, source URL, CC-BY-4.0 license notice and a description of transformations when sharing.",
+      "local_records": "storage/datasets/source-cache/public_records.jsonl",
+      "local_download_report": "storage/datasets/source-cache/cord-v2/download_report.json",
+      "download_command": "python -m training.download_public_receipts",
+      "offline_verification_command": "python -m training.download_public_receipts --verify-only",
+      "cached_license": "storage/datasets/source-cache/cord-v2/LICENSE-CC-BY.txt",
+      "cached_publisher_readme": "storage/datasets/source-cache/cord-v2/PUBLISHER-README.txt",
+      "downloaded_count": 150,
+      "selection": "First 75 official validation rows plus first 75 official test rows. The train viewer endpoint was unavailable due to its parquet row-group scan limit.",
+      "observed_duplicate": "One exact annotation-text duplicate crosses publisher splits: cord-v2-validation-0073 and cord-v2-test-0068. Both retain original splits and share a conservative group_id. The reference collection must not be presented as a leakage-free training/evaluation split."
+    },
+    {
+      "source_id": "rossumai/docile",
+      "title": "DocILE benchmark",
+      "decision": "not_downloaded",
+      "homepage": "https://docile.rossum.ai/",
+      "publisher_repository": "https://github.com/rossumai/docile",
+      "potential_labels": ["invoice"],
+      "reason": "The publisher requires a dataset-access request and token and describes access for research purposes. No access request or license acceptance was submitted. The code repository license is not treated as unrestricted permission for all underlying documents."
+    },
+    {
+      "source_id": "ICDAR2019-SROIE",
+      "title": "ICDAR 2019 Scanned Receipt OCR and Information Extraction",
+      "decision": "not_downloaded",
+      "homepage": "https://rrc.cvc.uab.es/?ch=13&com=downloads",
+      "paper": "https://arxiv.org/abs/2103.10213",
+      "potential_labels": ["receipt"],
+      "reason": "Secondary redistributors claim CC-BY-4.0, but the original download page was not accessible during this review. CORD provides directly verified publisher data permission, so no second-hand license claim was used to justify this download."
+    },
+    {
+      "source_id": "chinmays18/medical-prescription-dataset",
+      "title": "Medical prescription dataset",
+      "decision": "not_downloaded",
+      "homepage": "https://huggingface.co/datasets/chinmays18/medical-prescription-dataset",
+      "potential_labels": ["prescription"],
+      "reason": "The inspected publisher page did not establish explicit data licensing, consent provenance or whether the records are real versus synthetic. The displayed records also cannot be treated as clinically validated prescriptions. Not included."
+    }
+  ],
+  "real_data_gaps": [
+    "marksheet",
+    "educational_certificate",
+    "utility_bill",
+    "invoice",
+    "land_record",
+    "bank_statement",
+    "prescription"
+  ],
+  "gap_policy": "Use explicitly synthetic starter examples for uncovered labels. Do not silently relabel synthetic data as real, use private Drive documents without permission, or claim production accuracy. A separately reviewed, permitted real collection spanning every category is still needed for production evaluation."
+}
