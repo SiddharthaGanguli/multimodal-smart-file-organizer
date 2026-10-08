@@ -107,3 +107,22 @@ test("deleting the hosted index clears consent only after a successful server de
   await f.search.forget(); assert.equal(await f.search.enabled(), false);
   assert.equal((await f.store.list("assets", "A")).length, 1);
 });
+
+for (const error of [Object.assign(new Error("Drive is offline"), { code: "networkError", retryable: true }),
+  Object.assign(new Error("Reconnect Drive"), { code: "authRequired" })]) {
+  test(`Drive ${error.code} is not silently converted to no search matches`, async () => {
+    const f = fixture(); await f.search.enable();
+    f.client.request = async () => ({ results: [{ file_id: "drive-1", source: toSource(f.current),
+      snippet: "travel reimbursement", location: "document" }] });
+    f.library.checkedAsset = async () => { throw error; };
+    await assert.rejects(f.search.query("travel"), error);
+  });
+}
+
+test("cancel during Drive verification prevents sending document text to hosted search", async () => {
+  const f = fixture(); await f.search.enable();
+  const controller = new AbortController();
+  f.library.checkedAsset = async () => { controller.abort(); return f.current; };
+  await assert.rejects(f.search.index("local-1", controller.signal), { name: "AbortError" });
+  assert.equal(f.calls.length, 0);
+});
